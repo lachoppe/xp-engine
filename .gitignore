@@ -1,0 +1,10 @@
+
+*.vsidx
+
+.vs/vulkanTest/v17/
+
+x64/Debug/
+
+.vs/vulkanTest/FileContentIndex/
+
+x64/
