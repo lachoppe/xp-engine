@@ -32,6 +32,10 @@ public:
 	VkCommandPool commandPool;
 	VkCommandBuffer mainCommandBuffer;
 
+	VkRenderPass renderPass;
+	std::vector<VkFramebuffer> frameBuffers;
+
+
 	void Init();
 
 	void Cleanup();
@@ -45,4 +49,6 @@ private:
 	void InitVulkan();
 	void InitSwapchain();
 	void InitCommands();
+	void InitDefaultRenderPass();
+	void InitFramebuffers();
 };

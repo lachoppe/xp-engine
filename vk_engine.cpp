@@ -32,9 +32,7 @@
 void VulkanEngine::Init()
 {
 	SDL_Init(SDL_INIT_VIDEO);
-
-	SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN);
-
+	SDL_WindowFlags window_flags = SDL_WindowFlags::SDL_WINDOW_VULKAN;
 	window = SDL_CreateWindow(
 		"Vulkan Engine",
 		SDL_WINDOWPOS_UNDEFINED,
@@ -45,10 +43,10 @@ void VulkanEngine::Init()
 	);
 
 	InitVulkan();
-
 	InitSwapchain();
-
 	InitCommands();
+	InitDefaultRenderPass();
+	InitFramebuffers();
 
 	isInitialized = true;
 }
@@ -163,6 +161,59 @@ void VulkanEngine::InitCommands()
 }
 
 
+void VulkanEngine::InitDefaultRenderPass()
+{
+	VkAttachmentDescription colorAttachment = {};
+	colorAttachment.format = swapchainImageFormat;
+	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR;		// optimal for presenting on-screen
+
+	VkAttachmentReference colorAttachmentRef = {};
+	colorAttachmentRef.attachment = 0;
+	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;	// optimal for rendering into
+
+	VkSubpassDescription subpass = {};
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.colorAttachmentCount = 1;
+	subpass.pColorAttachments = &colorAttachmentRef;
+
+	VkRenderPassCreateInfo renderPassInfo = {};
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	renderPassInfo.attachmentCount = 1;
+	renderPassInfo.pAttachments = &colorAttachment;
+	renderPassInfo.subpassCount = 1;
+	renderPassInfo.pSubpasses = &subpass;
+
+	VK_CHECK(vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass));
+}
+
+
+void VulkanEngine::InitFramebuffers()
+{
+	VkFramebufferCreateInfo fbInfo = {};
+	fbInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	fbInfo.renderPass = renderPass;
+	fbInfo.attachmentCount = 1;
+	fbInfo.width = windowExtent.width;
+	fbInfo.height = windowExtent.height;
+	fbInfo.layers = 1;
+
+	const size_t swapchainImageCount = swapchainImages.size();
+	frameBuffers = std::vector<VkFramebuffer>(swapchainImageCount);
+
+	for (size_t i = 0; i < swapchainImageCount; ++i)
+	{
+		fbInfo.pAttachments = &swapchainImageViews[i];
+		VK_CHECK(vkCreateFramebuffer(device, &fbInfo, nullptr, &frameBuffers[i]));
+	}
+}
+
+
 void VulkanEngine::Cleanup()
 {
 	if (isInitialized)
@@ -171,8 +222,11 @@ void VulkanEngine::Cleanup()
 
 		vkDestroySwapchainKHR(device, swapchain, nullptr);
 
+		vkDestroyRenderPass(device, renderPass, nullptr);
+
 		for (int i = 0; i < swapchainImageViews.size(); ++i)
 		{
+			vkDestroyFramebuffer(device, frameBuffers[i], nullptr);
 			vkDestroyImageView(device, swapchainImageViews[i], nullptr);
 		}
 
