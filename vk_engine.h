@@ -15,16 +15,22 @@ public:
 
 	struct SDL_Window* window{ nullptr };
 
-	VkInstance instance;
-	VkDebugUtilsMessengerEXT debugMessenger;
-	VkPhysicalDevice chosenGPU;
-	VkDevice device;
-	VkSurfaceKHR surface;
+	VkInstance instance{ nullptr };
+	VkDebugUtilsMessengerEXT debugMessenger{ nullptr };
+	VkPhysicalDevice chosenGPU{ nullptr };
+	VkDevice device{ nullptr };
+	VkSurfaceKHR surface{ nullptr };
 
-	VkSwapchainKHR swapchain;
+	VkSwapchainKHR swapchain{ nullptr };
 	VkFormat swapchainImageFormat;
 	std::vector<VkImage> swapchainImages;
 	std::vector<VkImageView> swapchainImageViews;
+
+	VkQueue graphicsQueue;
+	uint32_t graphicsQueueFamily;
+
+	VkCommandPool commandPool;
+	VkCommandBuffer mainCommandBuffer;
 
 	void Init();
 
@@ -38,4 +44,5 @@ private:
 
 	void InitVulkan();
 	void InitSwapchain();
+	void InitCommands();
 };

@@ -48,6 +48,8 @@ void VulkanEngine::Init()
 
 	InitSwapchain();
 
+	InitCommands();
+
 	isInitialized = true;
 }
 
@@ -128,7 +130,8 @@ void VulkanEngine::InitVulkan()
 	device = vkbDevice.device;
 	chosenGPU = physicalDevice.physical_device;
 
-
+	graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
+	graphicsQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
 }
 
 
@@ -150,10 +153,22 @@ void VulkanEngine::InitSwapchain()
 }
 
 
+void VulkanEngine::InitCommands()
+{
+	VkCommandPoolCreateInfo commandPoolInfo = vkinit::command_pool_create_info(graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+	VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &commandPool));
+
+	VkCommandBufferAllocateInfo cmdAllocInfo = vkinit::command_buffer_allocate_info(commandPool, 1, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+	VK_CHECK(vkAllocateCommandBuffers(device, &cmdAllocInfo, &mainCommandBuffer));
+}
+
+
 void VulkanEngine::Cleanup()
 {
 	if (isInitialized)
 	{
+		vkDestroyCommandPool(device, commandPool, nullptr);
+
 		vkDestroySwapchainKHR(device, swapchain, nullptr);
 
 		for (int i = 0; i < swapchainImageViews.size(); ++i)

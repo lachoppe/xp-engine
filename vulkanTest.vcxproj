@@ -162,6 +162,7 @@
     <ClCompile Include="inc\VkBootstrap.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="vk_engine.cpp" />
+    <ClCompile Include="vk_initializers.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="inc\begin_code.h" />
