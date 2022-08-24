@@ -19,6 +19,22 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\vk_engine.cpp" />
+    <ClCompile Include="src\vk_initializers.cpp" />
+    <ClCompile Include="third_party\vkbootstrap\VkBootstrap.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\vk_engine.h" />
+    <ClInclude Include="src\vk_initializers.h" />
+    <ClInclude Include="src\vk_types.h" />
+    <ClInclude Include="third_party\vkbootstrap\VkBootstrap.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\triangle.frag" />
+    <None Include="shaders\triangle.vert" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{5A4234BA-9B20-4CD4-B9F0-D7BC800EDB93}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
@@ -104,7 +120,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(VULKAN_SDK)\Include;$(VULKAN_SDK)\Third-Party\Include;inc</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VULKAN_SDK)\Include;$(VULKAN_SDK)\Third-Party\Include;$(ProjectDir)\third_party\SDL2\include;$(ProjectDir)\third_party\vkbootstrap</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
@@ -145,7 +161,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(VULKAN_SDK)\Include;$(VULKAN_SDK)\Third-Party\Include;inc</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VULKAN_SDK)\Include;$(VULKAN_SDK)\Third-Party\Include;$(ProjectDir)\third_party\SDL2\include;$(ProjectDir)\third_party\vkbootstrap</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
@@ -158,115 +174,6 @@
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
     </Link>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClCompile Include="inc\VkBootstrap.cpp" />
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="vk_engine.cpp" />
-    <ClCompile Include="vk_initializers.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="inc\begin_code.h" />
-    <ClInclude Include="inc\close_code.h" />
-    <ClInclude Include="inc\SDL.h" />
-    <ClInclude Include="inc\SDL_assert.h" />
-    <ClInclude Include="inc\SDL_atomic.h" />
-    <ClInclude Include="inc\SDL_audio.h" />
-    <ClInclude Include="inc\SDL_bits.h" />
-    <ClInclude Include="inc\SDL_blendmode.h" />
-    <ClInclude Include="inc\SDL_clipboard.h" />
-    <ClInclude Include="inc\SDL_config.h" />
-    <ClInclude Include="inc\SDL_config_android.h" />
-    <ClInclude Include="inc\SDL_config_emscripten.h" />
-    <ClInclude Include="inc\SDL_config_iphoneos.h" />
-    <ClInclude Include="inc\SDL_config_macosx.h" />
-    <ClInclude Include="inc\SDL_config_minimal.h" />
-    <ClInclude Include="inc\SDL_config_ngage.h" />
-    <ClInclude Include="inc\SDL_config_os2.h" />
-    <ClInclude Include="inc\SDL_config_pandora.h" />
-    <ClInclude Include="inc\SDL_config_windows.h" />
-    <ClInclude Include="inc\SDL_config_wingdk.h" />
-    <ClInclude Include="inc\SDL_config_winrt.h" />
-    <ClInclude Include="inc\SDL_config_xbox.h" />
-    <ClInclude Include="inc\SDL_copying.h" />
-    <ClInclude Include="inc\SDL_cpuinfo.h" />
-    <ClInclude Include="inc\SDL_egl.h" />
-    <ClInclude Include="inc\SDL_endian.h" />
-    <ClInclude Include="inc\SDL_error.h" />
-    <ClInclude Include="inc\SDL_events.h" />
-    <ClInclude Include="inc\SDL_filesystem.h" />
-    <ClInclude Include="inc\SDL_gamecontroller.h" />
-    <ClInclude Include="inc\SDL_gesture.h" />
-    <ClInclude Include="inc\SDL_guid.h" />
-    <ClInclude Include="inc\SDL_haptic.h" />
-    <ClInclude Include="inc\SDL_hidapi.h" />
-    <ClInclude Include="inc\SDL_hints.h" />
-    <ClInclude Include="inc\SDL_joystick.h" />
-    <ClInclude Include="inc\SDL_keyboard.h" />
-    <ClInclude Include="inc\SDL_keycode.h" />
-    <ClInclude Include="inc\SDL_loadso.h" />
-    <ClInclude Include="inc\SDL_locale.h" />
-    <ClInclude Include="inc\SDL_log.h" />
-    <ClInclude Include="inc\SDL_main.h" />
-    <ClInclude Include="inc\SDL_messagebox.h" />
-    <ClInclude Include="inc\SDL_metal.h" />
-    <ClInclude Include="inc\SDL_misc.h" />
-    <ClInclude Include="inc\SDL_mouse.h" />
-    <ClInclude Include="inc\SDL_mutex.h" />
-    <ClInclude Include="inc\SDL_name.h" />
-    <ClInclude Include="inc\SDL_opengl.h" />
-    <ClInclude Include="inc\SDL_opengles.h" />
-    <ClInclude Include="inc\SDL_opengles2.h" />
-    <ClInclude Include="inc\SDL_opengles2_gl2.h" />
-    <ClInclude Include="inc\SDL_opengles2_gl2ext.h" />
-    <ClInclude Include="inc\SDL_opengles2_gl2platform.h" />
-    <ClInclude Include="inc\SDL_opengles2_khrplatform.h" />
-    <ClInclude Include="inc\SDL_opengl_glext.h" />
-    <ClInclude Include="inc\SDL_pixels.h" />
-    <ClInclude Include="inc\SDL_platform.h" />
-    <ClInclude Include="inc\SDL_power.h" />
-    <ClInclude Include="inc\SDL_quit.h" />
-    <ClInclude Include="inc\SDL_rect.h" />
-    <ClInclude Include="inc\SDL_render.h" />
-    <ClInclude Include="inc\SDL_revision.h" />
-    <ClInclude Include="inc\SDL_rwops.h" />
-    <ClInclude Include="inc\SDL_scancode.h" />
-    <ClInclude Include="inc\SDL_sensor.h" />
-    <ClInclude Include="inc\SDL_shape.h" />
-    <ClInclude Include="inc\SDL_stdinc.h" />
-    <ClInclude Include="inc\SDL_surface.h" />
-    <ClInclude Include="inc\SDL_system.h" />
-    <ClInclude Include="inc\SDL_syswm.h" />
-    <ClInclude Include="inc\SDL_test.h" />
-    <ClInclude Include="inc\SDL_test_assert.h" />
-    <ClInclude Include="inc\SDL_test_common.h" />
-    <ClInclude Include="inc\SDL_test_compare.h" />
-    <ClInclude Include="inc\SDL_test_crc32.h" />
-    <ClInclude Include="inc\SDL_test_font.h" />
-    <ClInclude Include="inc\SDL_test_fuzzer.h" />
-    <ClInclude Include="inc\SDL_test_harness.h" />
-    <ClInclude Include="inc\SDL_test_images.h" />
-    <ClInclude Include="inc\SDL_test_log.h" />
-    <ClInclude Include="inc\SDL_test_md5.h" />
-    <ClInclude Include="inc\SDL_test_memory.h" />
-    <ClInclude Include="inc\SDL_test_random.h" />
-    <ClInclude Include="inc\SDL_thread.h" />
-    <ClInclude Include="inc\SDL_timer.h" />
-    <ClInclude Include="inc\SDL_touch.h" />
-    <ClInclude Include="inc\SDL_types.h" />
-    <ClInclude Include="inc\SDL_version.h" />
-    <ClInclude Include="inc\SDL_video.h" />
-    <ClInclude Include="inc\SDL_vulkan.h" />
-    <ClInclude Include="inc\VkBootstrap.h" />
-    <ClInclude Include="inc\VkBootstrapDispatch.h" />
-    <ClInclude Include="vk_engine.h" />
-    <ClInclude Include="vk_initializers.h" />
-    <ClInclude Include="vk_types.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="inc\SDL_config.h.cmake" />
-    <None Include="inc\SDL_config.h.in" />
-    <None Include="inc\SDL_revision.h.cmake" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
