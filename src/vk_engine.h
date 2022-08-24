@@ -39,6 +39,9 @@ public:
 	VkSemaphore renderSemaphore{ nullptr };
 	VkFence renderFence{ nullptr };
 
+	VkPipelineLayout trianglePipelineLayout;
+	VkPipeline trianglePipeline;
+
 	void Init();
 
 	void Cleanup();
@@ -58,4 +61,22 @@ private:
 	void InitFramebuffers();
 	void InitSyncStructures();
 	void InitPipelines();
+};
+
+
+class PipelineBuilder
+{
+public:
+
+	std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
+	VkPipelineVertexInputStateCreateInfo vertexInput;
+	VkPipelineInputAssemblyStateCreateInfo inputAssembly;
+	VkViewport viewport;
+	VkRect2D scissor;
+	VkPipelineRasterizationStateCreateInfo rasterizer;
+	VkPipelineColorBlendAttachmentState colorBlendAttachment;
+	VkPipelineMultisampleStateCreateInfo multisampling;
+	VkPipelineLayout pipelineLayout;
+
+	VkPipeline BuildPipeline(VkDevice device, VkRenderPass pass);
 };
