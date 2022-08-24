@@ -1,0 +1,11 @@
+C:/dev/vulkanTest/out/build/x64-Debug/CMakeFiles/Shaders.dir
+C:/dev/vulkanTest/out/build/x64-Debug/CMakeFiles/edit_cache.dir
+C:/dev/vulkanTest/out/build/x64-Debug/CMakeFiles/rebuild_cache.dir
+C:/dev/vulkanTest/out/build/x64-Debug/third_party/CMakeFiles/vkbootstrap.dir
+C:/dev/vulkanTest/out/build/x64-Debug/third_party/CMakeFiles/tinyobjloader.dir
+C:/dev/vulkanTest/out/build/x64-Debug/third_party/CMakeFiles/imgui.dir
+C:/dev/vulkanTest/out/build/x64-Debug/third_party/CMakeFiles/edit_cache.dir
+C:/dev/vulkanTest/out/build/x64-Debug/third_party/CMakeFiles/rebuild_cache.dir
+C:/dev/vulkanTest/out/build/x64-Debug/src/CMakeFiles/vulkanTest.dir
+C:/dev/vulkanTest/out/build/x64-Debug/src/CMakeFiles/edit_cache.dir
+C:/dev/vulkanTest/out/build/x64-Debug/src/CMakeFiles/rebuild_cache.dir
