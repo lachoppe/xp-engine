@@ -49,10 +49,13 @@ public:
 
 private:
 
+	bool LoadShaderModule(const char* filePath, VkShaderModule* outShaderModule);
+
 	void InitVulkan();
 	void InitSwapchain();
 	void InitCommands();
 	void InitDefaultRenderPass();
 	void InitFramebuffers();
 	void InitSyncStructures();
+	void InitPipelines();
 };

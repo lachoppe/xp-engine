@@ -166,8 +166,9 @@
 #endif /* ! Mac OS X - breaks precompiled headers */
 
 #ifndef SDL_FALLTHROUGH
-#if (defined(__cplusplus) && __cplusplus >= 201703L) || \
-    (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L)
+// #if (defined(__cplusplus) && __cplusplus >= 201703L) || \
+//     (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L)
+#if 1
 #define SDL_FALLTHROUGH [[fallthrough]]
 #else
 #if defined(__has_attribute)

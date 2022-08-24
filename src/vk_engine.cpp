@@ -1,45 +1,46 @@
 #include "vk_engine.h"
 
-#include "SDL.h"
-#include "SDL_vulkan.h"
-
 #include <windows.h>
 #include <debugapi.h>
 #include <stdio.h>
+#include <fstream>
 
 #include "vk_types.h"
 #include "vk_initializers.h"
 
 #include "VKBootstrap.h"
 
+#include "SDL.h"
+#include "SDL_vulkan.h"
+
 
 #ifdef UNICODE
-#define VK_CHECK(x)															\
-	do																		\
-	{																		\
-		VkResult err = x;													\
-		if (err)															\
-		{																	\
-			const int msgLen = 64;											\
-			wchar_t str[msgLen];											\
-			swprintf(str, msgLen, L"Detected Vulkan error: %d\n", err);		\
-			OutputDebugString(str);											\
-			abort();														\
-		}																	\
+#define VK_CHECK(x)																		\
+	do																					\
+	{																					\
+		VkResult err = x;																\
+		if (err)																		\
+		{																				\
+			const int msgLen = 64;														\
+			wchar_t str[msgLen];														\
+			swprintf(str, msgLen, L"[%d] Detected Vulkan error: %d\n", __LINE__, err);	\
+			OutputDebugString(str);														\
+			abort();																	\
+		}																				\
 	} while (0);
 #else
-#define VK_CHECK(x)															\
-	do																		\
-	{																		\
-		VkResult err = x;													\
-		if (err)															\
-		{																	\
-			const int msgLen = 64;											\
-			char str[msgLen];												\
-			sprintf_s(str, msgLen, "Detected Vulkan error: %d\n", err);		\
-			OutputDebugString(str);											\
-			abort();														\
-		}																	\
+#define VK_CHECK(x)																		\
+	do																					\
+	{																					\
+		VkResult err = x;																\
+		if (err)																		\
+		{																				\
+			const int msgLen = 64;														\
+			char str[msgLen];															\
+			sprintf_s(str, msgLen, "[%d] Detected Vulkan error: %d\n", __LINE__, err);	\
+			OutputDebugString(str);														\
+			abort();																	\
+		}																				\
 	} while (0);
 #endif
 
@@ -63,6 +64,7 @@ void VulkanEngine::Init()
 	InitDefaultRenderPass();
 	InitFramebuffers();
 	InitSyncStructures();
+	InitPipelines();
 
 	isInitialized = true;
 }
@@ -115,6 +117,36 @@ VKAPI_ATTR VkBool32 VKAPI_CALL custom_debug_callback(
 	OutputDebugString(str);
 
 	return VK_FALSE; // Applications must return false here
+}
+
+
+bool VulkanEngine::LoadShaderModule(const char* filePath, VkShaderModule* outShaderModule)
+{
+	std::ifstream file(filePath, std::ios::ate | std::ios::binary);
+
+	if (!file.is_open())
+	{
+		return false;
+	}
+
+	size_t fileSize = static_cast<size_t>(file.tellg());
+	std::vector<uint32_t> buffer(fileSize / sizeof(uint32_t));
+	file.seekg(0);
+	file.read((char*)buffer.data(), fileSize);
+	file.close();
+
+	VkShaderModuleCreateInfo createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	createInfo.codeSize = buffer.size() * sizeof(uint32_t);
+	createInfo.pCode = buffer.data();
+
+	VkShaderModule shaderModule;
+	if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
+	{
+		return false;
+	}
+	*outShaderModule = shaderModule;
+	return true;
 }
 
 
@@ -252,6 +284,30 @@ void VulkanEngine::InitSyncStructures()
 }
 
 
+void VulkanEngine::InitPipelines()
+{
+	VkShaderModule triangleFragShader;
+	if (!LoadShaderModule("../shaders/triangle.frag.spv", &triangleFragShader))
+	{
+		OutputDebugString("Error when building the triangle fragment shader module\n");
+	}
+	else
+	{
+		OutputDebugString("Triangle fragment shader successfully loaded\n");
+	}
+
+	VkShaderModule triangleVertShader;
+	if (!LoadShaderModule("../shaders/triangle.vert.spv", &triangleVertShader))
+	{
+		OutputDebugString("Error when building the triangle vertex shader module\n");
+	}
+	else
+	{
+		OutputDebugString("Triangle vertex shader successfully loaded\n");
+	}
+}
+
+
 void VulkanEngine::Cleanup()
 {
 	if (isInitialized)
@@ -302,7 +358,7 @@ void VulkanEngine::Draw()
 
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
-	VkClearValue clearValue;
+	VkClearValue clearValue = {};
 	float flash = static_cast<float>( abs(sin(frameNumber / 120.0f)) );
 	clearValue.color = { { 0.0f, 0.0f, flash, 1.0f } };
 
