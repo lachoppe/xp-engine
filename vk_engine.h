@@ -29,12 +29,15 @@ public:
 	VkQueue graphicsQueue;
 	uint32_t graphicsQueueFamily;
 
-	VkCommandPool commandPool;
-	VkCommandBuffer mainCommandBuffer;
+	VkCommandPool commandPool{ nullptr };
+	VkCommandBuffer mainCommandBuffer{ nullptr };
 
-	VkRenderPass renderPass;
+	VkRenderPass renderPass{ nullptr };
 	std::vector<VkFramebuffer> frameBuffers;
 
+	VkSemaphore presentSemaphore{ nullptr };
+	VkSemaphore renderSemaphore{ nullptr };
+	VkFence renderFence{ nullptr };
 
 	void Init();
 
@@ -51,4 +54,5 @@ private:
 	void InitCommands();
 	void InitDefaultRenderPass();
 	void InitFramebuffers();
+	void InitSyncStructures();
 };

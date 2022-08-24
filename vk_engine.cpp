@@ -47,6 +47,7 @@ void VulkanEngine::Init()
 	InitCommands();
 	InitDefaultRenderPass();
 	InitFramebuffers();
+	InitSyncStructures();
 
 	isInitialized = true;
 }
@@ -122,7 +123,6 @@ void VulkanEngine::InitVulkan()
 		.value();
 
 	vkb::DeviceBuilder deviceBuilder{ physicalDevice };
-	
 	vkb::Device vkbDevice = deviceBuilder.build().value();
 
 	device = vkbDevice.device;
@@ -171,7 +171,7 @@ void VulkanEngine::InitDefaultRenderPass()
 	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR;		// optimal for presenting on-screen
+	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR;		// optimal for presenting on-screen
 
 	VkAttachmentReference colorAttachmentRef = {};
 	colorAttachmentRef.attachment = 0;
@@ -214,14 +214,35 @@ void VulkanEngine::InitFramebuffers()
 }
 
 
+void VulkanEngine::InitSyncStructures()
+{
+	VkFenceCreateInfo fenceCreateInfo = {};
+	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	// Creating this fence with the signaled bit set, so we can wait on it before using it on a GPU
+	fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+	VK_CHECK(vkCreateFence(device, &fenceCreateInfo, nullptr, &renderFence));
+
+	VkSemaphoreCreateInfo semaphoreCreateInfo = {};
+	semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	semaphoreCreateInfo.flags = 0;
+
+	VK_CHECK(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &presentSemaphore));
+	VK_CHECK(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &renderSemaphore));
+}
+
+
 void VulkanEngine::Cleanup()
 {
 	if (isInitialized)
 	{
+		vkDestroySemaphore(device, presentSemaphore, nullptr);
+		vkDestroySemaphore(device, renderSemaphore, nullptr);
+		vkDestroyFence(device, renderFence, nullptr);
+
 		vkDestroyCommandPool(device, commandPool, nullptr);
 
 		vkDestroySwapchainKHR(device, swapchain, nullptr);
-
 		vkDestroyRenderPass(device, renderPass, nullptr);
 
 		for (int i = 0; i < swapchainImageViews.size(); ++i)
@@ -242,7 +263,69 @@ void VulkanEngine::Cleanup()
 
 void VulkanEngine::Draw()
 {
+	const uint64_t timeoutNS = 1000000000;		// one second
 
+	VK_CHECK(vkWaitForFences(device, 1, &renderFence, true, timeoutNS));
+	VK_CHECK(vkResetFences(device, 1, &renderFence));
+
+	uint32_t swapchainImageIndex;
+	VK_CHECK(vkAcquireNextImageKHR(device, swapchain, timeoutNS, presentSemaphore, nullptr, &swapchainImageIndex));
+
+	VK_CHECK(vkResetCommandBuffer(mainCommandBuffer, 0));
+
+	VkCommandBuffer cmd = mainCommandBuffer;
+
+	VkCommandBufferBeginInfo cmdBeginInfo = {};
+	cmdBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	cmdBeginInfo.pInheritanceInfo = nullptr; // Explicitly not inheriting, because this is not a secondary command buffer
+	cmdBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;	// allow one-shot buffer optimizations
+
+	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
+
+	VkClearValue clearValue;
+	float flash = abs(sin(frameNumber / 120.0f));
+	clearValue.color = { { 0.0f, 0.0f, flash, 1.0f } };
+
+	VkRenderPassBeginInfo rpInfo = {};
+	rpInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	rpInfo.renderPass = renderPass;
+	rpInfo.renderArea.extent = windowExtent;
+	rpInfo.framebuffer = frameBuffers[swapchainImageIndex];
+	rpInfo.clearValueCount = 1;
+	rpInfo.pClearValues = &clearValue;
+
+	vkCmdBeginRenderPass(cmd, &rpInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	// ...
+
+	vkCmdEndRenderPass(cmd);
+
+	VK_CHECK(vkEndCommandBuffer(cmd));
+
+	VkSubmitInfo submit = {};
+	submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	submit.pWaitDstStageMask = &waitStage;
+	submit.waitSemaphoreCount = 1;
+	submit.pWaitSemaphores = &presentSemaphore;
+	submit.signalSemaphoreCount = 1;
+	submit.pSignalSemaphores = &renderSemaphore;
+	submit.commandBufferCount = 1;
+	submit.pCommandBuffers = &cmd;
+
+	VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &submit, renderFence));
+
+	VkPresentInfoKHR presentInfo = {};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &swapchain;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = &renderSemaphore;
+	presentInfo.pImageIndices = &swapchainImageIndex;
+
+	VK_CHECK(vkQueuePresentKHR(graphicsQueue, &presentInfo));
+
+	frameNumber++;
 }
 
 
