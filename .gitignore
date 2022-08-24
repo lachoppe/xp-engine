@@ -8,3 +8,7 @@ x64/Debug/
 .vs/vulkanTest/FileContentIndex/
 
 x64/
+
+out/build/x64-Debug/
+
+.vs/
