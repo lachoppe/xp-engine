@@ -287,7 +287,7 @@ void VulkanEngine::InitSyncStructures()
 void VulkanEngine::InitPipelines()
 {
 	VkShaderModule triangleFragShader;
-	if (!LoadShaderModule("../shaders/triangle.frag.spv", &triangleFragShader))
+	if (!LoadShaderModule("../shaders/colored_triangle.frag.spv", &triangleFragShader))
 	{
 		OutputDebugString("Error when building the triangle fragment shader module\n");
 	}
@@ -297,7 +297,7 @@ void VulkanEngine::InitPipelines()
 	}
 
 	VkShaderModule triangleVertShader;
-	if (!LoadShaderModule("../shaders/triangle.vert.spv", &triangleVertShader))
+	if (!LoadShaderModule("../shaders/colored_triangle.vert.spv", &triangleVertShader))
 	{
 		OutputDebugString("Error when building the triangle vertex shader module\n");
 	}
@@ -316,8 +316,8 @@ void VulkanEngine::InitPipelines()
 	pipelineBuilder.inputAssembly = vkinit::InputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	pipelineBuilder.viewport.x = 0.0f;
 	pipelineBuilder.viewport.y = 0.0f;
-	pipelineBuilder.viewport.width = windowExtent.width;
-	pipelineBuilder.viewport.height = windowExtent.height;
+	pipelineBuilder.viewport.width = static_cast<float>(windowExtent.width);
+	pipelineBuilder.viewport.height = static_cast<float>(windowExtent.height);
 	pipelineBuilder.viewport.minDepth = 0.0f;
 	pipelineBuilder.viewport.maxDepth = 1.0f;
 	pipelineBuilder.scissor.offset = { 0, 0 };
@@ -467,7 +467,7 @@ VkPipeline PipelineBuilder::BuildPipeline(VkDevice device, VkRenderPass pass)
 	VkGraphicsPipelineCreateInfo pipelineInfo = {};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 
-	pipelineInfo.stageCount = shaderStages.size();
+	pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
 	pipelineInfo.pStages = shaderStages.data();
 	pipelineInfo.pVertexInputState = &vertexInput;
 	pipelineInfo.pInputAssemblyState = &inputAssembly;
