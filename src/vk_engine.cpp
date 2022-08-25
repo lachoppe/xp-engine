@@ -45,6 +45,33 @@
 #endif
 
 
+void OutputMessage(const char* format, ...)
+{
+	const int bufLen{ 512 };
+	char buffer[bufLen];
+	va_list args;
+	va_start(args, format);
+	vsnprintf(buffer, bufLen, format, args);
+
+	OutputDebugStringA(buffer);
+
+	va_end(args);
+}
+
+void OutputMessage(const wchar_t* format, ...)
+{
+	const int bufLen{ 512 };
+	wchar_t buffer[bufLen];
+	va_list args;
+	va_start(args, format);
+	vswprintf(buffer, bufLen, format, args);
+
+	OutputDebugStringW(buffer);
+
+	va_end(args);
+}
+
+
 void VulkanEngine::Init()
 {
 	SDL_Init(SDL_INIT_VIDEO);
@@ -106,26 +133,25 @@ VKAPI_ATTR VkBool32 VKAPI_CALL custom_debug_callback(
 	auto ms = to_string_message_severity(messageSeverity);
 	auto mt = to_string_message_type(messageType);
 
-	const int msgLen = 2048;
-#ifdef UNICODE
-	wchar_t str[msgLen];
-	swprintf(str, msgLen, L"[%S: %S]\n%S\n", ms, mt, pCallbackData->pMessage);
-#else
-	char str[msgLen];
-	sprintf_s(str, msgLen, "[%s: %s]\n%s\n", ms, mt, pCallbackData->pMessage);
-#endif
-	OutputDebugString(str);
+	OutputMessage("[%s: %s]\n%s\n", ms, mt, pCallbackData->pMessage);
 
 	return VK_FALSE; // Applications must return false here
 }
 
 
-bool VulkanEngine::LoadShaderModule(const char* filePath, VkShaderModule* outShaderModule)
+bool VulkanEngine::LoadShaderModule(const char* filename, VkShaderModule* outShaderModule)
 {
+	const char* root = "../shaders/";
+	const char* ext = ".spv";
+	const int pathLen = 256;
+	char filePath[pathLen];
+	sprintf_s(filePath, pathLen, "%s%s%s", root, filename, ext);
+
 	std::ifstream file(filePath, std::ios::ate | std::ios::binary);
 
 	if (!file.is_open())
 	{
+		OutputMessage("Error when building shader module: %s\n", filename);
 		return false;
 	}
 
@@ -146,6 +172,8 @@ bool VulkanEngine::LoadShaderModule(const char* filePath, VkShaderModule* outSha
 		return false;
 	}
 	*outShaderModule = shaderModule;
+
+	OutputMessage("Shader successfully loaded: %s\n", filename);
 	return true;
 }
 
@@ -287,31 +315,24 @@ void VulkanEngine::InitSyncStructures()
 void VulkanEngine::InitPipelines()
 {
 	VkShaderModule triangleFragShader;
-	if (!LoadShaderModule("../shaders/colored_triangle.frag.spv", &triangleFragShader))
-	{
-		OutputDebugString("Error when building the triangle fragment shader module\n");
-	}
-	else
-	{
-		OutputDebugString("Triangle fragment shader successfully loaded\n");
-	}
+	LoadShaderModule("colored_triangle.frag", &triangleFragShader);
 
 	VkShaderModule triangleVertShader;
-	if (!LoadShaderModule("../shaders/colored_triangle.vert.spv", &triangleVertShader))
-	{
-		OutputDebugString("Error when building the triangle vertex shader module\n");
-	}
-	else
-	{
-		OutputDebugString("Triangle vertex shader successfully loaded\n");
-	}
+	LoadShaderModule("colored_triangle.vert", &triangleVertShader);
+
+	VkShaderModule redTriangleFragShader;
+	LoadShaderModule("triangle.frag", &redTriangleFragShader);
+
+	VkShaderModule redTriangleVertShader;
+	LoadShaderModule("triangle.vert", &redTriangleVertShader);
+
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::LayoutCreateInfo();
+	VkPipelineLayout trianglePipelineLayout;
 	VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &trianglePipelineLayout));
 
 	PipelineBuilder pipelineBuilder;
-	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_VERTEX_BIT, triangleVertShader));
-	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, triangleFragShader));
+
 	pipelineBuilder.vertexInput = vkinit::VertexInputStateCreateInfo();
 	pipelineBuilder.inputAssembly = vkinit::InputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	pipelineBuilder.viewport.x = 0.0f;
@@ -326,7 +347,15 @@ void VulkanEngine::InitPipelines()
 	pipelineBuilder.multisampling = vkinit::MultisampleStateCreateInfo();
 	pipelineBuilder.colorBlendAttachment = vkinit::ColorBlendAttachmentState();
 	pipelineBuilder.pipelineLayout = trianglePipelineLayout;
+
+	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_VERTEX_BIT, triangleVertShader));
+	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, triangleFragShader));
 	trianglePipeline = pipelineBuilder.BuildPipeline(device, renderPass);
+
+	pipelineBuilder.shaderStages.clear();
+	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_VERTEX_BIT, redTriangleVertShader));
+	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, redTriangleFragShader));
+	redTrianglePipeline = pipelineBuilder.BuildPipeline(device, renderPass);
 }
 
 
@@ -334,11 +363,16 @@ void VulkanEngine::Cleanup()
 {
 	if (isInitialized)
 	{
+		vkDeviceWaitIdle(device);
+
 		vkDestroySemaphore(device, presentSemaphore, nullptr);
 		vkDestroySemaphore(device, renderSemaphore, nullptr);
 		vkDestroyFence(device, renderFence, nullptr);
 
 		vkDestroyCommandPool(device, commandPool, nullptr);
+
+		vkDestroyPipeline(device, redTrianglePipeline, nullptr);
+		vkDestroyPipeline(device, trianglePipeline, nullptr);
 
 		vkDestroySwapchainKHR(device, swapchain, nullptr);
 		vkDestroyRenderPass(device, renderPass, nullptr);
@@ -394,7 +428,15 @@ void VulkanEngine::Draw()
 
 	vkCmdBeginRenderPass(cmd, &rpInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, trianglePipeline);
+	if (selectedShader == 0)
+	{
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, trianglePipeline);
+	}
+	else
+	{
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, redTrianglePipeline);
+	}
+
 	vkCmdDraw(cmd, 3, 1, 0, 0);
 
 	vkCmdEndRenderPass(cmd);
@@ -438,7 +480,16 @@ void VulkanEngine::Run()
 		while (SDL_PollEvent(&e) != 0)
 		{
 			if (e.type == SDL_QUIT)
+			{
 				bQuit = true;
+			}
+			else if (e.type == SDL_KEYDOWN)
+			{
+				if (e.key.keysym.sym == SDLK_SPACE)
+				{
+					selectedShader = (selectedShader + 1) % 2;
+				}
+			}
 		}
 		
 		Draw();

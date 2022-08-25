@@ -4,12 +4,18 @@
 
 #include "vk_types.h"
 
+
+void OutputMessage(const char* format, ...);
+void OutputMessage(const wchar_t* format, ...);
+
+
 class VulkanEngine
 {
 public:
 
 	bool isInitialized{ false };
 	int frameNumber{ 0 };
+	int selectedShader{ 0 };
 
 	VkExtent2D windowExtent{ 1700, 900 };
 
@@ -39,8 +45,8 @@ public:
 	VkSemaphore renderSemaphore{ nullptr };
 	VkFence renderFence{ nullptr };
 
-	VkPipelineLayout trianglePipelineLayout;
 	VkPipeline trianglePipeline;
+	VkPipeline redTrianglePipeline;
 
 	void Init();
 
