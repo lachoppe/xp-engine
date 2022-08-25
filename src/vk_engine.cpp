@@ -228,6 +228,11 @@ void VulkanEngine::InitSwapchain()
 	swapchainImages = vkbSwapchain.get_images().value();
 	swapchainImageViews = vkbSwapchain.get_image_views().value();
 	swapchainImageFormat = vkbSwapchain.image_format;
+
+	mainDeletionQueue.PushFunction([=]()
+		{
+			vkDestroySwapchainKHR(device, swapchain, nullptr);
+		});
 }
 
 
@@ -238,6 +243,11 @@ void VulkanEngine::InitCommands()
 
 	VkCommandBufferAllocateInfo cmdAllocInfo = vkinit::CommandBufferAllocateInfo(commandPool, 1, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 	VK_CHECK(vkAllocateCommandBuffers(device, &cmdAllocInfo, &mainCommandBuffer));
+
+	mainDeletionQueue.PushFunction([=]()
+		{
+			vkDestroyCommandPool(device, commandPool, nullptr);
+		});
 }
 
 
@@ -270,6 +280,11 @@ void VulkanEngine::InitDefaultRenderPass()
 	renderPassInfo.pSubpasses = &subpass;
 
 	VK_CHECK(vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass));
+
+	mainDeletionQueue.PushFunction([=]()
+		{
+			vkDestroyRenderPass(device, renderPass, nullptr);
+		});
 }
 
 
@@ -290,25 +305,38 @@ void VulkanEngine::InitFramebuffers()
 	{
 		fbInfo.pAttachments = &swapchainImageViews[i];
 		VK_CHECK(vkCreateFramebuffer(device, &fbInfo, nullptr, &frameBuffers[i]));
+
+		mainDeletionQueue.PushFunction([=]()
+			{
+				vkDestroyFramebuffer(device, frameBuffers[i], nullptr);
+				vkDestroyImageView(device, swapchainImageViews[i], nullptr);
+			});
 	}
 }
 
 
 void VulkanEngine::InitSyncStructures()
 {
-	VkFenceCreateInfo fenceCreateInfo = {};
-	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	// Creating this fence with the signaled bit set, so we can wait on it before using it on a GPU
-	fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+	VkFenceCreateInfo fenceCreateInfo = vkinit::FenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
 
 	VK_CHECK(vkCreateFence(device, &fenceCreateInfo, nullptr, &renderFence));
 
-	VkSemaphoreCreateInfo semaphoreCreateInfo = {};
-	semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-	semaphoreCreateInfo.flags = 0;
+	mainDeletionQueue.PushFunction([=]()
+		{
+			vkDestroyFence(device, renderFence, nullptr);
+		});
+
+	VkSemaphoreCreateInfo semaphoreCreateInfo = vkinit::SemaphoreCreateInfo();
 
 	VK_CHECK(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &presentSemaphore));
 	VK_CHECK(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &renderSemaphore));
+
+	mainDeletionQueue.PushFunction([=]()
+		{
+			vkDestroySemaphore(device, presentSemaphore, nullptr);
+			vkDestroySemaphore(device, renderSemaphore, nullptr);
+		});
 }
 
 
@@ -356,6 +384,19 @@ void VulkanEngine::InitPipelines()
 	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_VERTEX_BIT, redTriangleVertShader));
 	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, redTriangleFragShader));
 	redTrianglePipeline = pipelineBuilder.BuildPipeline(device, renderPass);
+
+	vkDestroyShaderModule(device, redTriangleVertShader, nullptr);
+	vkDestroyShaderModule(device, redTriangleFragShader, nullptr);
+	vkDestroyShaderModule(device, triangleVertShader, nullptr);
+	vkDestroyShaderModule(device, triangleFragShader, nullptr);
+
+	mainDeletionQueue.PushFunction([=]()
+		{
+			vkDestroyPipeline(device, redTrianglePipeline, nullptr);
+			vkDestroyPipeline(device, trianglePipeline, nullptr);
+
+			vkDestroyPipelineLayout(device, trianglePipelineLayout, nullptr);
+		});
 }
 
 
@@ -363,28 +404,12 @@ void VulkanEngine::Cleanup()
 {
 	if (isInitialized)
 	{
-		vkDeviceWaitIdle(device);
+		vkWaitForFences(device, 1, &renderFence, VK_TRUE, 1000000000);
 
-		vkDestroySemaphore(device, presentSemaphore, nullptr);
-		vkDestroySemaphore(device, renderSemaphore, nullptr);
-		vkDestroyFence(device, renderFence, nullptr);
+		mainDeletionQueue.Flush();
 
-		vkDestroyCommandPool(device, commandPool, nullptr);
-
-		vkDestroyPipeline(device, redTrianglePipeline, nullptr);
-		vkDestroyPipeline(device, trianglePipeline, nullptr);
-
-		vkDestroySwapchainKHR(device, swapchain, nullptr);
-		vkDestroyRenderPass(device, renderPass, nullptr);
-
-		for (int i = 0; i < swapchainImageViews.size(); ++i)
-		{
-			vkDestroyFramebuffer(device, frameBuffers[i], nullptr);
-			vkDestroyImageView(device, swapchainImageViews[i], nullptr);
-		}
-
-		vkDestroyDevice(device, nullptr);
 		vkDestroySurfaceKHR(instance, surface, nullptr);
+		vkDestroyDevice(device, nullptr);
 		vkb::destroy_debug_utils_messenger(instance, debugMessenger);
  		vkDestroyInstance(instance, nullptr);
 		SDL_DestroyWindow(window);

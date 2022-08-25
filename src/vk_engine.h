@@ -1,6 +1,8 @@
 #pragma once
 
 #include <vector>
+#include <deque>
+#include <functional>
 
 #include "vk_types.h"
 
@@ -8,6 +10,26 @@
 void OutputMessage(const char* format, ...);
 void OutputMessage(const wchar_t* format, ...);
 
+
+struct DeletionQueue
+{
+	std::deque<std::function<void()>> deletors;
+
+	void PushFunction(std::function<void()>&& function)
+	{
+		deletors.push_back(function);
+	}
+
+	void Flush()
+	{
+		for (auto it = deletors.rbegin(); it != deletors.rend(); it++)
+		{
+			(*it)();
+		}
+
+		deletors.clear();
+	}
+};
 
 class VulkanEngine
 {
@@ -18,6 +40,8 @@ public:
 	int selectedShader{ 0 };
 
 	VkExtent2D windowExtent{ 1700, 900 };
+
+	DeletionQueue mainDeletionQueue;
 
 	struct SDL_Window* window{ nullptr };
 

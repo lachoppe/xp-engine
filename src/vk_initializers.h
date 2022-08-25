@@ -13,4 +13,6 @@ namespace vkinit
 	VkPipelineMultisampleStateCreateInfo MultisampleStateCreateInfo();
 	VkPipelineColorBlendAttachmentState ColorBlendAttachmentState();
 	VkPipelineLayoutCreateInfo LayoutCreateInfo();
+	VkFenceCreateInfo FenceCreateInfo(VkFenceCreateFlags flags = 0);
+	VkSemaphoreCreateInfo SemaphoreCreateInfo(VkSemaphoreCreateFlags flags = 0);
 }
