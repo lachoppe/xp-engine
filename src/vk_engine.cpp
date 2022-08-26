@@ -196,7 +196,10 @@ void VulkanEngine::LoadMeshes()
 	triangleMesh.vertices[1].color = {  0.0f,  1.0f,  0.0f };
 	triangleMesh.vertices[2].color = {  0.0f,  1.0f,  0.0f };
 
+	monkeyMesh.LoadFromObj("../assets/monkey_smooth.obj");
+
 	UploadMesh(triangleMesh);
+	UploadMesh(monkeyMesh);
 }
 
 
@@ -564,7 +567,8 @@ void VulkanEngine::Draw()
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipeline);
 	VkDeviceSize offset = 0;
-	vkCmdBindVertexBuffers(cmd, 0, 1, &triangleMesh.vertexBuffer.buffer, &offset);
+//	vkCmdBindVertexBuffers(cmd, 0, 1, &triangleMesh.vertexBuffer.buffer, &offset);
+ 	vkCmdBindVertexBuffers(cmd, 0, 1, &monkeyMesh.vertexBuffer.buffer, &offset);
 
 	// Camera
 	const float FOV = 70.0f;
@@ -585,7 +589,8 @@ void VulkanEngine::Draw()
 	vkCmdPushConstants(cmd, meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &constants);
 
 
-	vkCmdDraw(cmd, static_cast<uint32_t>(triangleMesh.vertices.size()), 1, 0, 0);
+// 	vkCmdDraw(cmd, static_cast<uint32_t>(triangleMesh.vertices.size()), 1, 0, 0);
+	vkCmdDraw(cmd, static_cast<uint32_t>(monkeyMesh.vertices.size()), 1, 0, 0);
 
 	vkCmdEndRenderPass(cmd);
 

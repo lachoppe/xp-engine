@@ -82,9 +82,11 @@ public:
 	VkPipeline trianglePipeline;
 	VkPipeline redTrianglePipeline;
 	VkPipeline meshPipeline;
-	Mesh triangleMesh;
 	VkPipelineLayout meshPipelineLayout;
 
+	Mesh triangleMesh;
+	Mesh monkeyMesh;
+	
 	void Init();
 
 	void Cleanup();
