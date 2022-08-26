@@ -13,6 +13,8 @@
 #include "SDL.h"
 #include "SDL_vulkan.h"
 
+#define VMA_IMPLEMENTATION
+#include "vk_mem_alloc.h"
 
 #ifdef UNICODE
 #define VK_CHECK(x)																		\
@@ -92,6 +94,8 @@ void VulkanEngine::Init()
 	InitFramebuffers();
 	InitSyncStructures();
 	InitPipelines();
+
+	LoadMeshes();
 
 	isInitialized = true;
 }
@@ -178,6 +182,49 @@ bool VulkanEngine::LoadShaderModule(const char* filename, VkShaderModule* outSha
 }
 
 
+void VulkanEngine::LoadMeshes()
+{
+	triangleMesh.vertices.resize(3);
+
+	triangleMesh.vertices[0].position = {  1.0f,  1.0f,  0.0f };
+	triangleMesh.vertices[1].position = { -1.0f,  1.0f,  0.0f };
+	triangleMesh.vertices[2].position = {  0.0f, -1.0f,  0.0f };
+
+	triangleMesh.vertices[0].color = {  0.0f,  1.0f,  0.0f };
+	triangleMesh.vertices[1].color = {  0.0f,  1.0f,  0.0f };
+	triangleMesh.vertices[2].color = {  0.0f,  1.0f,  0.0f };
+
+	UploadMesh(triangleMesh);
+}
+
+
+void VulkanEngine::UploadMesh(Mesh& mesh)
+{
+	const size_t bufferSizeBytes = mesh.vertices.size() * sizeof(Vertex);
+
+	VkBufferCreateInfo bufferInfo = {};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+
+	bufferInfo.size = bufferSizeBytes;
+	bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+
+	VmaAllocationCreateInfo vmaAllocInfo = {};
+	vmaAllocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+
+	VK_CHECK(vmaCreateBuffer(allocator, &bufferInfo, &vmaAllocInfo, &mesh.vertexBuffer.buffer, &mesh.vertexBuffer.allocation, nullptr));
+
+	mainDeletionQueue.PushFunction([=]()
+		{
+			vmaDestroyBuffer(allocator, mesh.vertexBuffer.buffer, mesh.vertexBuffer.allocation);
+		});
+
+	void* data;
+	vmaMapMemory(allocator, mesh.vertexBuffer.allocation, &data);
+	memcpy(data, mesh.vertices.data(), bufferSizeBytes);
+	vmaUnmapMemory(allocator, mesh.vertexBuffer.allocation);
+}
+
+
 void VulkanEngine::InitVulkan()
 {
 	vkb::InstanceBuilder builder;
@@ -210,6 +257,12 @@ void VulkanEngine::InitVulkan()
 
 	graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
 	graphicsQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
+
+	VmaAllocatorCreateInfo allocatorInfo = {};
+	allocatorInfo.physicalDevice = chosenGPU;
+	allocatorInfo.device = device;
+	allocatorInfo.instance = instance;
+	vmaCreateAllocator(&allocatorInfo, &allocator);
 }
 
 
@@ -408,11 +461,14 @@ void VulkanEngine::Cleanup()
 
 		mainDeletionQueue.Flush();
 
+		vmaDestroyAllocator(allocator);
+
 		vkDestroySurfaceKHR(instance, surface, nullptr);
 		vkDestroyDevice(device, nullptr);
 		vkb::destroy_debug_utils_messenger(instance, debugMessenger);
  		vkDestroyInstance(instance, nullptr);
 		SDL_DestroyWindow(window);
+
 		isInitialized = false;
 	}
 }

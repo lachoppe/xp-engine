@@ -5,6 +5,7 @@
 #include <functional>
 
 #include "vk_types.h"
+#include "vk_mesh.h"
 
 
 void OutputMessage(const char* format, ...);
@@ -39,10 +40,10 @@ public:
 	int frameNumber{ 0 };
 	int selectedShader{ 0 };
 
-	VkExtent2D windowExtent{ 1700, 900 };
-
+	VmaAllocator allocator;
 	DeletionQueue mainDeletionQueue;
 
+	VkExtent2D windowExtent{ 1700, 900 };
 	struct SDL_Window* window{ nullptr };
 
 	VkInstance instance{ nullptr };
@@ -71,6 +72,8 @@ public:
 
 	VkPipeline trianglePipeline;
 	VkPipeline redTrianglePipeline;
+	VkPipeline meshPipeline;
+	Mesh triangleMesh;
 
 	void Init();
 
@@ -83,6 +86,7 @@ public:
 private:
 
 	bool LoadShaderModule(const char* filePath, VkShaderModule* outShaderModule);
+	void LoadMeshes();
 
 	void InitVulkan();
 	void InitSwapchain();
@@ -91,6 +95,8 @@ private:
 	void InitFramebuffers();
 	void InitSyncStructures();
 	void InitPipelines();
+
+	void UploadMesh(Mesh& mesh);
 };
 
 
