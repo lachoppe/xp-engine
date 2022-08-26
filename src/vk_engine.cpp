@@ -438,6 +438,25 @@ void VulkanEngine::InitPipelines()
 	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, redTriangleFragShader));
 	redTrianglePipeline = pipelineBuilder.BuildPipeline(device, renderPass);
 
+
+	VertexInputDescription vertexDescription = Vertex::GetVertexDescription();
+	pipelineBuilder.vertexInput.pVertexAttributeDescriptions = vertexDescription.attributes.data();
+	pipelineBuilder.vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexDescription.attributes.size());
+	pipelineBuilder.vertexInput.pVertexBindingDescriptions = vertexDescription.bindings.data();
+	pipelineBuilder.vertexInput.vertexBindingDescriptionCount = static_cast<uint32_t>(vertexDescription.bindings.size());
+
+	pipelineBuilder.shaderStages.clear();
+
+	VkShaderModule meshVertShader;
+	LoadShaderModule("tri_mesh.vert", &meshVertShader);
+
+	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_VERTEX_BIT, meshVertShader));
+	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, triangleFragShader));
+
+	meshPipeline = pipelineBuilder.BuildPipeline(device, renderPass);
+
+
+	vkDestroyShaderModule(device, meshVertShader, nullptr);
 	vkDestroyShaderModule(device, redTriangleVertShader, nullptr);
 	vkDestroyShaderModule(device, redTriangleFragShader, nullptr);
 	vkDestroyShaderModule(device, triangleVertShader, nullptr);
@@ -445,6 +464,7 @@ void VulkanEngine::InitPipelines()
 
 	mainDeletionQueue.PushFunction([=]()
 		{
+			vkDestroyPipeline(device, meshPipeline, nullptr);
 			vkDestroyPipeline(device, redTrianglePipeline, nullptr);
 			vkDestroyPipeline(device, trianglePipeline, nullptr);
 
@@ -509,16 +529,11 @@ void VulkanEngine::Draw()
 
 	vkCmdBeginRenderPass(cmd, &rpInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-	if (selectedShader == 0)
-	{
-		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, trianglePipeline);
-	}
-	else
-	{
-		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, redTrianglePipeline);
-	}
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipeline);
+	VkDeviceSize offset = 0;
+	vkCmdBindVertexBuffers(cmd, 0, 1, &triangleMesh.vertexBuffer.buffer, &offset);
 
-	vkCmdDraw(cmd, 3, 1, 0, 0);
+	vkCmdDraw(cmd, static_cast<uint32_t>(triangleMesh.vertices.size()), 1, 0, 0);
 
 	vkCmdEndRenderPass(cmd);
 
