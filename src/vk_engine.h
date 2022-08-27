@@ -66,6 +66,10 @@ public:
 	std::vector<VkImage> swapchainImages;
 	std::vector<VkImageView> swapchainImageViews;
 
+	VkFormat depthFormat;
+	AllocatedImage depthImage;
+	VkImageView depthImageView;
+
 	VkQueue graphicsQueue;
 	uint32_t graphicsQueueFamily;
 
@@ -124,6 +128,7 @@ public:
 	VkPipelineRasterizationStateCreateInfo rasterizer;
 	VkPipelineColorBlendAttachmentState colorBlendAttachment;
 	VkPipelineMultisampleStateCreateInfo multisampling;
+	VkPipelineDepthStencilStateCreateInfo depthStencil;
 	VkPipelineLayout pipelineLayout;
 
 	VkPipeline BuildPipeline(VkDevice device, VkRenderPass pass);

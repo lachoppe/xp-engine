@@ -15,4 +15,7 @@ namespace vkinit
 	VkPipelineLayoutCreateInfo LayoutCreateInfo();
 	VkFenceCreateInfo FenceCreateInfo(VkFenceCreateFlags flags = 0);
 	VkSemaphoreCreateInfo SemaphoreCreateInfo(VkSemaphoreCreateFlags flags = 0);
+	VkImageCreateInfo ImageCreateInfo(VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D extent);
+	VkImageViewCreateInfo ImageViewCreateInfo(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags);
+	VkPipelineDepthStencilStateCreateInfo DepthStencilCreateInfo(bool depthTest, bool depthWrite, VkCompareOp compareOp);
 }
