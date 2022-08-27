@@ -76,6 +76,82 @@ void OutputMessage(const wchar_t* format, ...)
 }
 
 
+Material* VulkanEngine::CreateMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name)
+{
+	Material mat;
+	mat.pipeline = pipeline;
+	mat.pipelineLayout = layout;
+	materials[name] = mat;
+	return &materials[name];
+}
+
+
+Material* VulkanEngine::GetMaterial(const std::string& name)
+{
+	auto it = materials.find(name);
+	if (it == materials.end())
+		return nullptr;
+	else
+		return &(*it).second;
+}
+
+
+Mesh* VulkanEngine::GetMesh(const std::string& name)
+{
+	auto it = meshes.find(name);
+	if (it == meshes.end())
+		return nullptr;
+	else
+		return &(*it).second;
+}
+
+
+void VulkanEngine::DrawObjects(VkCommandBuffer cmd, RenderObject* first, int count)
+{
+	const glm::vec3 camPos = { 0.0f, -6.0f, -10.0f };
+	const glm::mat4 view = glm::translate(glm::mat4(1.0f), camPos);
+	glm::mat4 projection = glm::perspective(glm::radians(fieldOfView), static_cast<float>(windowExtent.width) / static_cast<float>(windowExtent.height), 0.1f, 200.0f);
+	projection[1][1] *= -1;
+
+	Mesh* lastMesh = nullptr;
+	Material* lastMaterial = nullptr;
+	for (int i = 0; i < count; i++)
+	{
+		const RenderObject& object = first[i];
+
+		if (object.material != lastMaterial)
+		{
+			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipeline);
+			lastMaterial = object.material;
+		}
+
+		if (object.material == nullptr)
+			continue;
+
+		const glm::mat4 model = object.transformMatrix;
+		glm::mat4 meshMatrix = projection * view * model;
+
+		MeshPushConstants constants;
+		constants.renderMatrix = meshMatrix;
+
+		vkCmdPushConstants(cmd, object.material->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &constants);
+
+		if (object.mesh != lastMesh)
+		{
+			VkDeviceSize offset = 0;
+			vkCmdBindVertexBuffers(cmd, 0, 1, &object.mesh->vertexBuffer.buffer, &offset);
+			lastMesh = object.mesh;
+		}
+
+		if (object.mesh == nullptr)
+			continue;
+
+		vkCmdDraw(cmd, static_cast<int>(object.mesh->vertices.size()), 1, 0, 0);
+	}
+}
+
+
+
 void VulkanEngine::Init()
 {
 	SDL_Init(SDL_INIT_VIDEO);
@@ -98,6 +174,8 @@ void VulkanEngine::Init()
 	InitPipelines();
 
 	LoadMeshes();
+
+	InitScene();
 
 	isInitialized = true;
 }
@@ -186,21 +264,23 @@ bool VulkanEngine::LoadShaderModule(const char* filename, VkShaderModule* outSha
 
 void VulkanEngine::LoadMeshes()
 {
+	Mesh triangleMesh;
 	triangleMesh.vertices.resize(3);
-
 	triangleMesh.vertices[0].position = {  1.0f,  1.0f,  0.0f };
 	triangleMesh.vertices[1].position = { -1.0f,  1.0f,  0.0f };
 	triangleMesh.vertices[2].position = {  0.0f, -1.0f,  0.0f };
-
 	triangleMesh.vertices[0].color = {  0.0f,  1.0f,  0.0f };
 	triangleMesh.vertices[1].color = {  0.0f,  1.0f,  0.0f };
 	triangleMesh.vertices[2].color = {  0.0f,  1.0f,  0.0f };
-
-	monkeyMesh.LoadFromObj("../assets/monkey_smooth.obj");
-
 	UploadMesh(triangleMesh);
+	meshes["triangle"] = triangleMesh;
+
+	Mesh monkeyMesh;
+	monkeyMesh.LoadFromObj("../assets/monkey_smooth.obj");
 	UploadMesh(monkeyMesh);
+	meshes["monkey"] = monkeyMesh;
 }
+
 
 
 void VulkanEngine::UploadMesh(Mesh& mesh)
@@ -500,6 +580,13 @@ void VulkanEngine::InitPipelines()
 	pipelineBuilder.depthStencil = vkinit::DepthStencilCreateInfo(true, true, VK_COMPARE_OP_LESS_OR_EQUAL);
 
 
+
+	VkPipeline trianglePipeline;
+	VkPipeline redTrianglePipeline;
+	VkPipeline meshPipeline;
+	VkPipelineLayout meshPipelineLayout;
+
+
 	// Triangle layout
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::LayoutCreateInfo();
 	VkPipelineLayout trianglePipelineLayout;
@@ -553,6 +640,7 @@ void VulkanEngine::InitPipelines()
 
 	meshPipeline = pipelineBuilder.BuildPipeline(device, renderPass);
 
+	CreateMaterial(meshPipeline, meshPipelineLayout, "defaultMesh");
 
 
 	// Shader load cleanup
@@ -570,6 +658,32 @@ void VulkanEngine::InitPipelines()
 
 			vkDestroyPipelineLayout(device, trianglePipelineLayout, nullptr);
 		});
+}
+
+
+void VulkanEngine::InitScene()
+{
+	RenderObject monkey;
+	monkey.mesh = GetMesh("monkey");
+	monkey.material = GetMaterial("defaultMesh");
+	monkey.transformMatrix = glm::mat4{ 1.0f };
+
+	renderables.push_back(monkey);
+
+	for (int x = -20; x <= 20; ++x)
+	{
+		for (int y = -20; y <= 20; ++y)
+		{
+			RenderObject tri;
+			tri.mesh = GetMesh("triangle");
+			tri.material = GetMaterial("defaultMesh");
+			glm::mat4 translation = glm::translate(glm::mat4{ 1.0f }, glm::vec3(x, 0.0f, y));
+			glm::mat4 scale = glm::scale(glm::mat4{ 1.0f }, glm::vec3(0.2f, 0.2f, 0.2f));
+			tri.transformMatrix = translation * scale;
+
+			renderables.push_back(tri);
+		}
+	}
 }
 
 
@@ -633,32 +747,8 @@ void VulkanEngine::Draw()
 
 	vkCmdBeginRenderPass(cmd, &rpInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipeline);
-	VkDeviceSize offset = 0;
-//	vkCmdBindVertexBuffers(cmd, 0, 1, &triangleMesh.vertexBuffer.buffer, &offset);
- 	vkCmdBindVertexBuffers(cmd, 0, 1, &monkeyMesh.vertexBuffer.buffer, &offset);
-
-	// Camera
-	const float FOV = 70.0f;
-	glm::vec3 camPos = { 0.0f, 0.0f, -2.f };
-	glm::mat4 view = glm::translate(glm::mat4(1.0f), camPos);
-	glm::mat4 projection = glm::perspective(
-		glm::radians(FOV),
-		static_cast<float>(windowExtent.width) / static_cast<float>(windowExtent.height),
-		0.1f,
-		200.0f);
-	projection[1][1] *= -1.0f;
-
-	// Animate
-	glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(frameNumber * 0.4f), glm::vec3(0.0f, 1.0f, 0.0f));
-	glm::mat4 meshMatrix = projection * view * model;
-	MeshPushConstants constants;
-	constants.render_matrix = meshMatrix;
-	vkCmdPushConstants(cmd, meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &constants);
-
-
-// 	vkCmdDraw(cmd, static_cast<uint32_t>(triangleMesh.vertices.size()), 1, 0, 0);
-	vkCmdDraw(cmd, static_cast<uint32_t>(monkeyMesh.vertices.size()), 1, 0, 0);
+	std::sort(renderables.begin(), renderables.end());
+	DrawObjects(cmd, &renderables[0], static_cast<int>(renderables.size()));
 
 	vkCmdEndRenderPass(cmd);
 

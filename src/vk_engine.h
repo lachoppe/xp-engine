@@ -16,7 +16,27 @@ void OutputMessage(const wchar_t* format, ...);
 struct MeshPushConstants
 {
 	glm::vec4 data;
-	glm::mat4 render_matrix;
+	glm::mat4 renderMatrix;
+};
+
+
+struct Material
+{
+	VkPipeline pipeline;
+	VkPipelineLayout pipelineLayout;
+};
+
+
+struct RenderObject
+{
+	Mesh* mesh;
+	Material* material;
+	glm::mat4 transformMatrix;
+
+	bool operator < (const RenderObject& other) const
+	{
+		return (material->pipeline < other.material->pipeline);
+	}
 };
 
 
@@ -54,6 +74,7 @@ public:
 
 	VkExtent2D windowExtent{ 1700, 900 };
 	struct SDL_Window* window{ nullptr };
+	float fieldOfView{ 70.0f };
 
 	VkInstance instance{ nullptr };
 	VkDebugUtilsMessengerEXT debugMessenger{ nullptr };
@@ -83,21 +104,22 @@ public:
 	VkSemaphore renderSemaphore{ nullptr };
 	VkFence renderFence{ nullptr };
 
-	VkPipeline trianglePipeline;
-	VkPipeline redTrianglePipeline;
-	VkPipeline meshPipeline;
-	VkPipelineLayout meshPipelineLayout;
 
-	Mesh triangleMesh;
-	Mesh monkeyMesh;
-	
+	// scene
+	std::vector<RenderObject> renderables;
+	std::unordered_map<std::string, Material> materials;
+	std::unordered_map<std::string, Mesh> meshes;
+
+	Material* CreateMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name);
+	Material* GetMaterial(const std::string& name);
+	Mesh* GetMesh(const std::string& name);
+
+	void DrawObjects(VkCommandBuffer cmd, RenderObject* first, int count);
+
 	void Init();
-
-	void Cleanup();
-
-	void Draw();
-
 	void Run();
+	void Draw();
+	void Cleanup();
 
 private:
 
@@ -111,6 +133,7 @@ private:
 	void InitFramebuffers();
 	void InitSyncStructures();
 	void InitPipelines();
+	void InitScene();
 
 	void UploadMesh(Mesh& mesh);
 };
