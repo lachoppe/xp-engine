@@ -75,6 +75,8 @@ public:
 	VkExtent2D windowExtent{ 1700, 900 };
 	struct SDL_Window* window{ nullptr };
 	float fieldOfView{ 70.0f };
+	glm::vec3 camPos{ 0.0f, 0.0f, 0.0f };
+	glm::vec3 camVel{ 0.0f, 0.0f, 0.0f };
 
 	VkInstance instance{ nullptr };
 	VkDebugUtilsMessengerEXT debugMessenger{ nullptr };
@@ -104,6 +106,9 @@ public:
 	VkSemaphore renderSemaphore{ nullptr };
 	VkFence renderFence{ nullptr };
 
+	bool useDvorak = true;
+	const unsigned char* keyboardState{ nullptr };
+	int keyboardStateLen;
 
 	// scene
 	std::vector<RenderObject> renderables;
@@ -114,6 +119,7 @@ public:
 	Material* GetMaterial(const std::string& name);
 	Mesh* GetMesh(const std::string& name);
 
+	void UpdateCamera();
 	void DrawObjects(VkCommandBuffer cmd, RenderObject* first, int count);
 
 	void Init();

@@ -12,6 +12,7 @@
 
 #include "SDL.h"
 #include "SDL_vulkan.h"
+#include "SDL_keyboard.h"
 
 #include "glm/gtx/transform.hpp"
 
@@ -108,7 +109,6 @@ Mesh* VulkanEngine::GetMesh(const std::string& name)
 
 void VulkanEngine::DrawObjects(VkCommandBuffer cmd, RenderObject* first, int count)
 {
-	const glm::vec3 camPos = { 0.0f, -6.0f, -10.0f };
 	const glm::mat4 view = glm::translate(glm::mat4(1.0f), camPos);
 	glm::mat4 projection = glm::perspective(glm::radians(fieldOfView), static_cast<float>(windowExtent.width) / static_cast<float>(windowExtent.height), 0.1f, 200.0f);
 	projection[1][1] *= -1;
@@ -155,6 +155,8 @@ void VulkanEngine::DrawObjects(VkCommandBuffer cmd, RenderObject* first, int cou
 void VulkanEngine::Init()
 {
 	SDL_Init(SDL_INIT_VIDEO);
+	keyboardState = SDL_GetKeyboardState(&keyboardStateLen);
+
 	SDL_WindowFlags window_flags = SDL_WindowFlags::SDL_WINDOW_VULKAN;
 	window = SDL_CreateWindow(
 		"Vulkan Engine",
@@ -663,6 +665,8 @@ void VulkanEngine::InitPipelines()
 
 void VulkanEngine::InitScene()
 {
+	camPos = { 0.0f, -6.0f, -10.0f };
+
 	RenderObject monkey;
 	monkey.mesh = GetMesh("monkey");
 	monkey.material = GetMaterial("defaultMesh");
@@ -781,6 +785,58 @@ void VulkanEngine::Draw()
 }
 
 
+void VulkanEngine::UpdateCamera()
+{
+	const float ACCEL = 0.015f;
+	const float DRAG = 0.9f;
+
+	enum MOVE_DIR
+	{
+		FWD,
+		LEFT,
+		BACK,
+		RIGHT,
+		UP,
+		DOWN,
+		//
+		COUNT
+	};
+	const SDL_Scancode scQwerty[MOVE_DIR::COUNT] = {
+		SDL_SCANCODE_W,
+		SDL_SCANCODE_A,
+		SDL_SCANCODE_S,
+		SDL_SCANCODE_D,
+		SDL_SCANCODE_LALT,
+		SDL_SCANCODE_SPACE
+	};
+	const SDL_Scancode scDvorak[MOVE_DIR::COUNT] = {
+		SDL_SCANCODE_COMMA,
+		SDL_SCANCODE_A,
+		SDL_SCANCODE_O,
+		SDL_SCANCODE_E,
+		SDL_SCANCODE_HOME,
+		SDL_SCANCODE_END
+	};
+	const glm::vec3 moveVec[MOVE_DIR::COUNT] = {
+		glm::vec3( 0.0f,  0.0f,  1.0f),
+		glm::vec3( 1.0f,  0.0f,  0.0f),
+		glm::vec3( 0.0f,  0.0f, -1.0f),
+		glm::vec3(-1.0f,  0.0f,  0.0f),
+		glm::vec3( 0.0f, -1.0f,  0.0f),
+		glm::vec3( 0.0f,  1.0f,  0.0f)
+	};
+	const SDL_Scancode* scanCodes = useDvorak ? scDvorak : scQwerty;
+	for (int i = 0; i < MOVE_DIR::COUNT; ++i)
+	{
+		if (keyboardState[scanCodes[i]])
+			camVel += moveVec[i] * ACCEL;
+	}
+
+	camVel *= DRAG;
+	camPos += camVel;
+}
+
+
 void VulkanEngine::Run()
 {
 	SDL_Event e;
@@ -800,9 +856,14 @@ void VulkanEngine::Run()
 				{
 					selectedShader = (selectedShader + 1) % 2;
 				}
+				else if (e.key.keysym.sym == SDLK_d)
+				{
+					useDvorak = !useDvorak;
+				}
 			}
 		}
-		
+
+		UpdateCamera();
 		Draw();
 	}
 }
