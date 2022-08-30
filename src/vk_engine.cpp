@@ -560,8 +560,8 @@ void VulkanEngine::InitSyncStructures()
 void VulkanEngine::InitPipelines()
 {
 	// Shader load (match with cleanup)
-	VkShaderModule triangleFragShader;
-	LoadShaderModule("colored_triangle.frag", &triangleFragShader);
+	VkShaderModule coloredTriangleFragShader;
+	LoadShaderModule("colored_triangle.frag", &coloredTriangleFragShader);
 
 	VkShaderModule triangleVertShader;
 	LoadShaderModule("colored_triangle.vert", &triangleVertShader);
@@ -574,6 +574,9 @@ void VulkanEngine::InitPipelines()
 
 	VkShaderModule meshVertShader;
 	LoadShaderModule("tri_mesh.vert", &meshVertShader);
+
+	VkShaderModule greyscaleTriangleFragShader;
+	LoadShaderModule("greyscale_triangle.frag", &greyscaleTriangleFragShader);
 
 
 	// Pipeline common
@@ -599,6 +602,7 @@ void VulkanEngine::InitPipelines()
 	VkPipeline trianglePipeline;
 	VkPipeline redTrianglePipeline;
 	VkPipeline meshPipeline;
+	VkPipeline greyMeshPipeline;
 	VkPipelineLayout meshPipelineLayout;
 
 
@@ -610,7 +614,7 @@ void VulkanEngine::InitPipelines()
 
 	// Colored triangle pipeline
 	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_VERTEX_BIT, triangleVertShader));
-	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, triangleFragShader));
+	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, coloredTriangleFragShader));
 	trianglePipeline = pipelineBuilder.BuildPipeline(device, renderPass);
 
 	// Red triangle pipeline
@@ -643,19 +647,26 @@ void VulkanEngine::InitPipelines()
 
 	pipelineBuilder.pipelineLayout = meshPipelineLayout;
 
-	// Mesh pipeline
+	// Mesh pipelines
 	VertexInputDescription vertexDescription = Vertex::GetVertexDescription();
 	pipelineBuilder.vertexInput.pVertexAttributeDescriptions = vertexDescription.attributes.data();
 	pipelineBuilder.vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexDescription.attributes.size());
 	pipelineBuilder.vertexInput.pVertexBindingDescriptions = vertexDescription.bindings.data();
 	pipelineBuilder.vertexInput.vertexBindingDescriptionCount = static_cast<uint32_t>(vertexDescription.bindings.size());
 
+	// Colored version
 	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_VERTEX_BIT, meshVertShader));
-	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, triangleFragShader));
-
+	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, coloredTriangleFragShader));
 	meshPipeline = pipelineBuilder.BuildPipeline(device, renderPass);
-
 	CreateMaterial(meshPipeline, meshPipelineLayout, "defaultMesh");
+
+	// Grey version
+	pipelineBuilder.shaderStages.clear();
+	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_VERTEX_BIT, meshVertShader));
+	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, greyscaleTriangleFragShader));
+	greyMeshPipeline = pipelineBuilder.BuildPipeline(device, renderPass);
+	CreateMaterial(greyMeshPipeline, meshPipelineLayout, "greyMesh");
+
 
 
 	// Shader load cleanup
@@ -663,10 +674,12 @@ void VulkanEngine::InitPipelines()
 	vkDestroyShaderModule(device, redTriangleVertShader, nullptr);
 	vkDestroyShaderModule(device, redTriangleFragShader, nullptr);
 	vkDestroyShaderModule(device, triangleVertShader, nullptr);
-	vkDestroyShaderModule(device, triangleFragShader, nullptr);
+	vkDestroyShaderModule(device, coloredTriangleFragShader, nullptr);
+	vkDestroyShaderModule(device, greyscaleTriangleFragShader, nullptr);
 
 	mainDeletionQueue.PushFunction([=]()
 		{
+			vkDestroyPipeline(device, greyMeshPipeline, nullptr);
 			vkDestroyPipeline(device, meshPipeline, nullptr);
 			vkDestroyPipeline(device, redTrianglePipeline, nullptr);
 			vkDestroyPipeline(device, trianglePipeline, nullptr);
@@ -697,11 +710,10 @@ void VulkanEngine::InitScene()
 	if (!meshes.empty())
 	{
 		// Very slow framerate, but interactive.  No heavy CPU or GPU, likely bandwidth or driver time?
-// 		const int meshVolumeDim = 20;
-// 		const float meshVolumeWidth = 200.0f;
-
-		const int meshVolumeDim = 10;
-		const float meshVolumeWidth = 100.0f;
+//		const int meshVolumeDim = 20;
+//		const float meshVolumeWidth = 200.0f;
+ 		const int meshVolumeDim = 10;
+ 		const float meshVolumeWidth = 100.0f;
 
 		const float step = meshVolumeWidth / meshVolumeDim;
 		const glm::vec3 start{ -meshVolumeWidth * 0.5f };
@@ -714,7 +726,7 @@ void VulkanEngine::InitScene()
 				{
 					RenderObject ro;
 					ro.mesh = meshes[meshIndex];
-					ro.material = GetMaterial("defaultMesh");
+					ro.material = ((x + y + z) % 2) ? GetMaterial("greyMesh") : GetMaterial("defaultMesh");
 					glm::vec3 pos{ start.x + x * step, start.y + y * step, start.z + z * step };
 					ro.transformMatrix = glm::translate(glm::mat4{ 1.0f }, pos - ro.mesh->GetObjectCenter());
 					renderables.push_back(ro);

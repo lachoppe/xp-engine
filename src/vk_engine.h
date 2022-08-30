@@ -35,7 +35,9 @@ struct RenderObject
 
 	bool operator < (const RenderObject& other) const
 	{
-		return (material->pipeline < other.material->pipeline);
+		if (material->pipeline != other.material->pipeline)
+			return (material->pipeline < other.material->pipeline);
+		return mesh < other.mesh;
 	}
 };
 
