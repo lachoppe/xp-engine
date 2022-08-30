@@ -55,12 +55,12 @@ bool Mesh::LoadFromObj(const char* filename)
 
 	if (!warn.empty())
 	{
-		OutputMessage("WARN [OBJ LOAD]: %s\n", warn.c_str());
+		OutputMessage("[WARN] Loading '%s': %s\n", filename, warn.c_str());
 	}
 
 	if (!err.empty())
 	{
-		OutputMessage("ERROR [OBJ LOAD]: %s\n", warn.c_str());
+		OutputMessage("[ERROR] Loading '%s': %s\n", filename, err.c_str());
 		return false;
 	}
 
@@ -95,6 +95,10 @@ bool Mesh::LoadFromObj(const char* filename)
 				// DEBUG normal as color
 				newVert.color = newVert.normal;
 
+				// Update object bounding box
+				objPosMin = glm::min(objPosMin, newVert.position);
+				objPosMax = glm::max(objPosMax, newVert.position);
+
 				vertices.push_back(newVert);
 			}
 
@@ -103,4 +107,10 @@ bool Mesh::LoadFromObj(const char* filename)
 	}
 
 	return true;
+}
+
+
+glm::vec3 Mesh::GetObjectCenter() const
+{
+	return (objPosMin + objPosMax) * 0.5f;
 }

@@ -25,8 +25,10 @@ struct Vertex
 struct Mesh
 {
 	std::vector<Vertex> vertices;
-
 	AllocatedBuffer vertexBuffer;
+	glm::vec3 objPosMin{ 0.0f };
+	glm::vec3 objPosMax{ 0.0f };
 
 	bool LoadFromObj(const char* filename);
+	glm::vec3 GetObjectCenter() const;
 };

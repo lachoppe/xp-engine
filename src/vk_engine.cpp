@@ -277,12 +277,25 @@ void VulkanEngine::LoadMeshes()
 	UploadMesh(triangleMesh);
 	meshes["triangle"] = triangleMesh;
 
-	Mesh monkeyMesh;
-	monkeyMesh.LoadFromObj("../assets/monkey_smooth.obj");
-	UploadMesh(monkeyMesh);
-	meshes["monkey"] = monkeyMesh;
-}
+	std::unordered_map<std::string, std::string> meshesToLoad;
 
+	// List of meshes to load
+	meshesToLoad["monkey"]			= "../assets/monkey_smooth.obj";
+	meshesToLoad["apple"]			= "../assets/apple.obj";
+// 	meshesToLoad["rabbit_low"]		= "../assets/rabbit_low.obj";
+// 	meshesToLoad["rabbit_med"]		= "../assets/rabbit_med.obj";
+	meshesToLoad["rabbit_high"]		= "../assets/rabbit_high.obj";
+
+	for (auto it = meshesToLoad.begin(); it != meshesToLoad.end(); ++it)
+	{
+		Mesh mesh;
+		if (mesh.LoadFromObj((*it).second.c_str()))
+		{
+			UploadMesh(mesh);
+			meshes[(*it).first.c_str()] = mesh;
+		}
+	}
+}
 
 
 void VulkanEngine::UploadMesh(Mesh& mesh)
@@ -667,12 +680,50 @@ void VulkanEngine::InitScene()
 {
 	camPos = { 0.0f, -6.0f, -10.0f };
 
-	RenderObject monkey;
-	monkey.mesh = GetMesh("monkey");
-	monkey.material = GetMaterial("defaultMesh");
-	monkey.transformMatrix = glm::mat4{ 1.0f };
+	std::vector<std::string> meshNames;
+	meshNames.push_back("monkey");
+	meshNames.push_back("apple");
+	meshNames.push_back("rabbit_high");
 
-	renderables.push_back(monkey);
+	std::vector<Mesh*> meshes;
+	for (auto it = meshNames.begin(); it != meshNames.end(); ++it)
+	{
+		Mesh* mesh = GetMesh((*it).c_str());
+		if (mesh == nullptr)
+			continue;
+		meshes.push_back(mesh);
+	}
+
+	if (!meshes.empty())
+	{
+		// Very slow framerate, but interactive.  No heavy CPU or GPU, likely bandwidth or driver time?
+// 		const int meshVolumeDim = 20;
+// 		const float meshVolumeWidth = 200.0f;
+
+		const int meshVolumeDim = 10;
+		const float meshVolumeWidth = 100.0f;
+
+		const float step = meshVolumeWidth / meshVolumeDim;
+		const glm::vec3 start{ -meshVolumeWidth * 0.5f };
+		int meshIndex = 0;
+		for (int x = 0; x < meshVolumeDim; ++x)
+		{
+			for (int y = 0; y < meshVolumeDim; ++y)
+			{
+				for (int z = 0; z < meshVolumeDim; ++z)
+				{
+					RenderObject ro;
+					ro.mesh = meshes[meshIndex];
+					ro.material = GetMaterial("defaultMesh");
+					glm::vec3 pos{ start.x + x * step, start.y + y * step, start.z + z * step };
+					ro.transformMatrix = glm::translate(glm::mat4{ 1.0f }, pos - ro.mesh->GetObjectCenter());
+					renderables.push_back(ro);
+
+					meshIndex = (meshIndex + 1) % static_cast<int>(meshes.size());
+				}
+			}
+		}
+	}
 
 	for (int x = -20; x <= 20; ++x)
 	{
