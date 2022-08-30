@@ -851,6 +851,7 @@ void VulkanEngine::Draw()
 void VulkanEngine::UpdateCamera()
 {
 	const float ACCEL = 0.015f;
+	const float SPRINT = 3.0f;
 	const float DRAG = 0.9f;
 
 	enum MOVE_DIR
@@ -889,10 +890,15 @@ void VulkanEngine::UpdateCamera()
 		glm::vec3( 0.0f,  1.0f,  0.0f)
 	};
 	const SDL_Scancode* scanCodes = useDvorak ? scDvorak : scQwerty;
+
+	float accel = ACCEL;
+	if (keyboardState[SDL_SCANCODE_LSHIFT])
+		accel *= SPRINT;
+
 	for (int i = 0; i < MOVE_DIR::COUNT; ++i)
 	{
 		if (keyboardState[scanCodes[i]])
-			camVel += moveVec[i] * ACCEL;
+			camVel += moveVec[i] * accel;
 	}
 
 	camVel *= DRAG;
