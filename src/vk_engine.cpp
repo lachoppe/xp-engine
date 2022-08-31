@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <fstream>
 
+#include <chrono>
+
 #include "vk_types.h"
 #include "vk_initializers.h"
 
@@ -79,7 +81,7 @@ void OutputMessage(const wchar_t* format, ...)
 
 Material* VulkanEngine::CreateMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name)
 {
-	Material mat;
+	Material mat = {};
 	mat.pipeline = pipeline;
 	mat.pipelineLayout = layout;
 	materials[name] = mat;
@@ -107,6 +109,12 @@ Mesh* VulkanEngine::GetMesh(const std::string& name)
 }
 
 
+FrameData& VulkanEngine::GetCurrentFrame()
+{
+	return frames[frameNumber % FRAME_OVERLAP];
+}
+
+
 void VulkanEngine::DrawObjects(VkCommandBuffer cmd, RenderObject* first, int count)
 {
 	const glm::mat4 view = glm::translate(glm::mat4(1.0f), camPos);
@@ -131,7 +139,7 @@ void VulkanEngine::DrawObjects(VkCommandBuffer cmd, RenderObject* first, int cou
 		const glm::mat4 model = object.transformMatrix;
 		glm::mat4 meshMatrix = projection * view * model;
 
-		MeshPushConstants constants;
+		MeshPushConstants constants = {};
 		constants.renderMatrix = meshMatrix;
 
 		vkCmdPushConstants(cmd, object.material->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &constants);
@@ -414,15 +422,19 @@ void VulkanEngine::InitSwapchain()
 void VulkanEngine::InitCommands()
 {
 	VkCommandPoolCreateInfo commandPoolInfo = vkinit::CommandPoolCreateInfo(graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-	VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &commandPool));
 
-	VkCommandBufferAllocateInfo cmdAllocInfo = vkinit::CommandBufferAllocateInfo(commandPool, 1, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-	VK_CHECK(vkAllocateCommandBuffers(device, &cmdAllocInfo, &mainCommandBuffer));
+	for (int i = 0; i < FRAME_OVERLAP; ++i)
+	{
+		VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &frames[i].commandPool));
 
-	mainDeletionQueue.PushFunction([=]()
-		{
-			vkDestroyCommandPool(device, commandPool, nullptr);
-		});
+		VkCommandBufferAllocateInfo cmdAllocInfo = vkinit::CommandBufferAllocateInfo(frames[i].commandPool, 1, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+		VK_CHECK(vkAllocateCommandBuffers(device, &cmdAllocInfo, &frames[i].mainCommandBuffer));
+
+		mainDeletionQueue.PushFunction([=]()
+			{
+				vkDestroyCommandPool(device, frames[i].commandPool, nullptr);
+			});
+	}
 }
 
 
@@ -537,23 +549,27 @@ void VulkanEngine::InitSyncStructures()
 	// Creating this fence with the signaled bit set, so we can wait on it before using it on a GPU
 	VkFenceCreateInfo fenceCreateInfo = vkinit::FenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
 
-	VK_CHECK(vkCreateFence(device, &fenceCreateInfo, nullptr, &renderFence));
-
-	mainDeletionQueue.PushFunction([=]()
-		{
-			vkDestroyFence(device, renderFence, nullptr);
-		});
-
 	VkSemaphoreCreateInfo semaphoreCreateInfo = vkinit::SemaphoreCreateInfo();
 
-	VK_CHECK(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &presentSemaphore));
-	VK_CHECK(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &renderSemaphore));
+	for (int i = 0; i < FRAME_OVERLAP; ++i)
+	{
+		VK_CHECK(vkCreateFence(device, &fenceCreateInfo, nullptr, &frames[i].renderFence));
 
-	mainDeletionQueue.PushFunction([=]()
-		{
-			vkDestroySemaphore(device, presentSemaphore, nullptr);
-			vkDestroySemaphore(device, renderSemaphore, nullptr);
-		});
+		mainDeletionQueue.PushFunction([=]()
+			{
+				vkDestroyFence(device, frames[i].renderFence, nullptr);
+			});
+
+
+		VK_CHECK(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &frames[i].presentSemaphore));
+		VK_CHECK(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &frames[i].renderSemaphore));
+
+		mainDeletionQueue.PushFunction([=]()
+			{
+				vkDestroySemaphore(device, frames[i].presentSemaphore, nullptr);
+				vkDestroySemaphore(device, frames[i].renderSemaphore, nullptr);
+			});
+	}
 }
 
 
@@ -709,9 +725,11 @@ void VulkanEngine::InitScene()
 
 	if (!meshes.empty())
 	{
-		// Very slow framerate, but interactive.  No heavy CPU or GPU, likely bandwidth or driver time?
+		// Expensive full mesh
 //		const int meshVolumeDim = 20;
 //		const float meshVolumeWidth = 200.0f;
+
+		// Cheaper small mesh
  		const int meshVolumeDim = 10;
  		const float meshVolumeWidth = 100.0f;
 
@@ -758,7 +776,7 @@ void VulkanEngine::Cleanup()
 {
 	if (isInitialized)
 	{
-		vkWaitForFences(device, 1, &renderFence, VK_TRUE, 1000000000);
+		vkDeviceWaitIdle(device);
 
 		mainDeletionQueue.Flush();
 
@@ -777,17 +795,29 @@ void VulkanEngine::Cleanup()
 
 void VulkanEngine::Draw()
 {
+	using namespace std::chrono;
+	uint64_t ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+	if ((ms - lastFrameTimeMS) > 1000)
+	{
+		int frameSecCount = frameNumber - lastSecFrameNumber;
+		uint64_t durationMS = ms - lastFrameTimeMS;
+		float fps = static_cast<float>(frameSecCount) / static_cast<float>(durationMS) * 1000.f;
+		OutputMessage("FPS: %4d frames / %4d ms = %.2f\n", frameSecCount, durationMS, fps);
+		lastFrameTimeMS = ms;
+		lastSecFrameNumber = frameNumber;
+	}
+
 	const uint64_t timeoutNS = 1000000000;		// one second
 
-	VK_CHECK(vkWaitForFences(device, 1, &renderFence, true, timeoutNS));
-	VK_CHECK(vkResetFences(device, 1, &renderFence));
+	VK_CHECK(vkWaitForFences(device, 1, &GetCurrentFrame().renderFence, true, timeoutNS));
+	VK_CHECK(vkResetFences(device, 1, &GetCurrentFrame().renderFence));
 
 	uint32_t swapchainImageIndex;
-	VK_CHECK(vkAcquireNextImageKHR(device, swapchain, timeoutNS, presentSemaphore, nullptr, &swapchainImageIndex));
+	VK_CHECK(vkAcquireNextImageKHR(device, swapchain, timeoutNS, GetCurrentFrame().presentSemaphore, nullptr, &swapchainImageIndex));
 
-	VK_CHECK(vkResetCommandBuffer(mainCommandBuffer, 0));
+	VK_CHECK(vkResetCommandBuffer(GetCurrentFrame().mainCommandBuffer, 0));
 
-	VkCommandBuffer cmd = mainCommandBuffer;
+	VkCommandBuffer cmd = GetCurrentFrame().mainCommandBuffer;
 
 	VkCommandBufferBeginInfo cmdBeginInfo = {};
 	cmdBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -826,20 +856,20 @@ void VulkanEngine::Draw()
 	VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	submit.pWaitDstStageMask = &waitStage;
 	submit.waitSemaphoreCount = 1;
-	submit.pWaitSemaphores = &presentSemaphore;
+	submit.pWaitSemaphores = &GetCurrentFrame().presentSemaphore;
 	submit.signalSemaphoreCount = 1;
-	submit.pSignalSemaphores = &renderSemaphore;
+	submit.pSignalSemaphores = &GetCurrentFrame().renderSemaphore;
 	submit.commandBufferCount = 1;
 	submit.pCommandBuffers = &cmd;
 
-	VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &submit, renderFence));
+	VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &submit, GetCurrentFrame().renderFence));
 
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = &swapchain;
 	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = &renderSemaphore;
+	presentInfo.pWaitSemaphores = &GetCurrentFrame().renderSemaphore;
 	presentInfo.pImageIndices = &swapchainImageIndex;
 
 	VK_CHECK(vkQueuePresentKHR(graphicsQueue, &presentInfo));

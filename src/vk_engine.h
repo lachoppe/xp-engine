@@ -63,12 +63,27 @@ struct DeletionQueue
 };
 
 
+struct FrameData
+{
+	VkSemaphore presentSemaphore{ nullptr };
+	VkSemaphore renderSemaphore{ nullptr };
+	VkFence renderFence{ nullptr };
+
+	VkCommandPool commandPool{ nullptr };
+	VkCommandBuffer mainCommandBuffer{ nullptr };
+};
+
+constexpr unsigned int FRAME_OVERLAP = 2;
+
+
 class VulkanEngine
 {
 public:
 
 	bool isInitialized{ false };
 	int frameNumber{ 0 };
+	uint64_t lastFrameTimeMS{ 0 };
+	int lastSecFrameNumber{ 0 };
 	int selectedShader{ 0 };
 
 	VmaAllocator allocator;
@@ -98,15 +113,10 @@ public:
 	VkQueue graphicsQueue;
 	uint32_t graphicsQueueFamily;
 
-	VkCommandPool commandPool{ nullptr };
-	VkCommandBuffer mainCommandBuffer{ nullptr };
-
 	VkRenderPass renderPass{ nullptr };
 	std::vector<VkFramebuffer> frameBuffers;
 
-	VkSemaphore presentSemaphore{ nullptr };
-	VkSemaphore renderSemaphore{ nullptr };
-	VkFence renderFence{ nullptr };
+	FrameData frames[FRAME_OVERLAP];
 
 	bool useDvorak = true;
 	const unsigned char* keyboardState{ nullptr };
@@ -120,6 +130,7 @@ public:
 	Material* CreateMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name);
 	Material* GetMaterial(const std::string& name);
 	Mesh* GetMesh(const std::string& name);
+	FrameData& GetCurrentFrame();
 
 	void UpdateCamera();
 	void DrawObjects(VkCommandBuffer cmd, RenderObject* first, int count);
