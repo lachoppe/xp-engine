@@ -12,3 +12,5 @@ x64/
 out/build/x64-Debug/
 
 .vs/
+
+out/build/x64-Release/
