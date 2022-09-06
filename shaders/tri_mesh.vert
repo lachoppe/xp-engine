@@ -6,6 +6,13 @@ layout (location = 2) in vec3 vColor;
 
 layout (location = 0) out vec3 outColor;
 
+layout (set=0, binding=0) uniform CameraBuffer
+{
+	mat4 view;
+	mat4 proj;
+	mat4 viewProj;
+} cameraData;
+
 layout( push_constant ) uniform constants
 {
 	vec4 data;
@@ -14,6 +21,7 @@ layout( push_constant ) uniform constants
 
 void main()
 {
-	gl_Position = PushConstants.render_matrix * vec4(vPosition, 1.0f);
+	mat4 xform = (cameraData.viewProj * PushConstants.render_matrix);
+	gl_Position = xform * vec4(vPosition, 1.0f);
 	outColor = vColor;
 }

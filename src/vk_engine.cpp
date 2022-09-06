@@ -79,6 +79,25 @@ void OutputMessage(const wchar_t* format, ...)
 }
 
 
+AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage)
+{
+	VkBufferCreateInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+
+	info.size = allocSize;
+	info.usage = usage;
+
+	VmaAllocationCreateInfo vmaAllocInfo = {};
+	vmaAllocInfo.usage = memoryUsage;
+
+	AllocatedBuffer buffer{ nullptr, nullptr };
+
+	VK_CHECK(vmaCreateBuffer(allocator, &info, &vmaAllocInfo, &buffer.buffer, &buffer.allocation, nullptr));
+
+	return buffer;
+}
+
+
 Material* VulkanEngine::CreateMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name)
 {
 	Material mat = {};
@@ -121,6 +140,16 @@ void VulkanEngine::DrawObjects(VkCommandBuffer cmd, RenderObject* first, int cou
 	glm::mat4 projection = glm::perspective(glm::radians(fieldOfView), static_cast<float>(windowExtent.width) / static_cast<float>(windowExtent.height), 0.1f, 200.0f);
 	projection[1][1] *= -1;
 
+	GPUCameraData camData;
+	camData.proj = projection;
+	camData.view = view;
+	camData.viewProj = projection * view;
+	void* data;
+	vmaMapMemory(allocator, GetCurrentFrame().cameraBuffer.allocation, &data);
+	memcpy(data, &camData, sizeof(camData));
+	vmaUnmapMemory(allocator, GetCurrentFrame().cameraBuffer.allocation);
+
+
 	Mesh* lastMesh = nullptr;
 	Material* lastMaterial = nullptr;
 	for (int i = 0; i < count; i++)
@@ -131,13 +160,14 @@ void VulkanEngine::DrawObjects(VkCommandBuffer cmd, RenderObject* first, int cou
 		{
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipeline);
 			lastMaterial = object.material;
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipelineLayout, 0, 1, &GetCurrentFrame().globalDescriptor, 0, nullptr);
 		}
 
 		if (object.material == nullptr)
 			continue;
 
 		const glm::mat4 model = object.transformMatrix;
-		glm::mat4 meshMatrix = projection * view * model;
+		glm::mat4 meshMatrix = model;
 
 		MeshPushConstants constants = {};
 		constants.renderMatrix = meshMatrix;
@@ -181,6 +211,7 @@ void VulkanEngine::Init()
 	InitDefaultRenderPass();
 	InitFramebuffers();
 	InitSyncStructures();
+	InitDescriptors();
 	InitPipelines();
 
 	LoadMeshes();
@@ -527,9 +558,10 @@ void VulkanEngine::InitFramebuffers()
 
 	for (size_t i = 0; i < swapchainImageCount; ++i)
 	{
-		VkImageView attachments[2];
-		attachments[0] = swapchainImageViews[i];
-		attachments[1] = depthImageView;
+		VkImageView attachments[2] = {
+			swapchainImageViews[i],
+			depthImageView
+		};
 
 		fbInfo.pAttachments = attachments;
 		fbInfo.attachmentCount = 2;
@@ -570,6 +602,81 @@ void VulkanEngine::InitSyncStructures()
 				vkDestroySemaphore(device, frames[i].renderSemaphore, nullptr);
 			});
 	}
+}
+
+
+void VulkanEngine::InitDescriptors()
+{
+	std::vector<VkDescriptorPoolSize> sizes =
+	{
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 }
+	};
+
+	VkDescriptorPoolCreateInfo poolInfo = {};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.pPoolSizes = sizes.data();
+	poolInfo.poolSizeCount = static_cast<uint32_t>(sizes.size());
+	poolInfo.maxSets = 10;
+
+	vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool);
+
+
+	VkDescriptorSetLayoutBinding camBufferBinding = {};
+	camBufferBinding.binding = 0;
+	camBufferBinding.descriptorCount = 1;
+	camBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	camBufferBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+	VkDescriptorSetLayoutCreateInfo setInfo = {};
+	setInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	setInfo.bindingCount = 1;
+	setInfo.pBindings = &camBufferBinding;
+
+	vkCreateDescriptorSetLayout(device, &setInfo, nullptr, &globalSetLayout);
+
+
+	for (int i = 0; i < FRAME_OVERLAP; ++i)
+	{
+		frames[i].cameraBuffer = CreateBuffer(sizeof(GPUCameraData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+		VkDescriptorSetAllocateInfo allocInfo = {};
+		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		allocInfo.descriptorPool = descriptorPool;
+		allocInfo.pSetLayouts = &globalSetLayout;
+		allocInfo.descriptorSetCount = 1;
+
+		vkAllocateDescriptorSets(device, &allocInfo, &frames[i].globalDescriptor);
+
+		VkDescriptorBufferInfo bufInfo = {};
+		bufInfo.buffer = frames[i].cameraBuffer.buffer;
+		bufInfo.offset = 0;
+		bufInfo.range = sizeof(GPUCameraData);
+
+		VkWriteDescriptorSet setWrite = {};
+		setWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		setWrite.dstBinding = 0;
+		setWrite.descriptorCount = 1;
+		setWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		setWrite.dstSet = frames[i].globalDescriptor;
+		setWrite.pBufferInfo = &bufInfo;
+
+		vkUpdateDescriptorSets(device, 1, &setWrite, 0, nullptr);
+	}
+
+
+	for (int i = 0; i < FRAME_OVERLAP; ++i)
+	{
+		mainDeletionQueue.PushFunction([=]()
+			{
+				vmaDestroyBuffer(allocator, frames[i].cameraBuffer.buffer, frames[i].cameraBuffer.allocation);
+			});
+	}
+
+	mainDeletionQueue.PushFunction([=]()
+		{
+			vkDestroyDescriptorSetLayout(device, globalSetLayout, nullptr);
+			vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+		});
 }
 
 
@@ -647,13 +754,15 @@ void VulkanEngine::InitPipelines()
 	// Mesh pipeline layout
 	VkPipelineLayoutCreateInfo meshPipelineLayoutInfo = vkinit::LayoutCreateInfo();
 
-	VkPushConstantRange pushConstant;
+	VkPushConstantRange pushConstant = {};
 	pushConstant.offset = 0;
 	pushConstant.size = sizeof(MeshPushConstants);
 	pushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
 	meshPipelineLayoutInfo.pPushConstantRanges = &pushConstant;
 	meshPipelineLayoutInfo.pushConstantRangeCount = 1;
+	meshPipelineLayoutInfo.pSetLayouts = &globalSetLayout;
+	meshPipelineLayoutInfo.setLayoutCount = 1;
 
 	VK_CHECK(vkCreatePipelineLayout(device, &meshPipelineLayoutInfo, nullptr, &meshPipelineLayout));
 	mainDeletionQueue.PushFunction([=]()
@@ -742,7 +851,7 @@ void VulkanEngine::InitScene()
 			{
 				for (int z = 0; z < meshVolumeDim; ++z)
 				{
-					RenderObject ro;
+					RenderObject ro = {};
 					ro.mesh = meshes[meshIndex];
 					ro.material = ((x + y + z) % 2) ? GetMaterial("greyMesh") : GetMaterial("defaultMesh");
 					glm::vec3 pos{ start.x + x * step, start.y + y * step, start.z + z * step };
@@ -759,7 +868,7 @@ void VulkanEngine::InitScene()
 	{
 		for (int y = -20; y <= 20; ++y)
 		{
-			RenderObject tri;
+			RenderObject tri = {};
 			tri.mesh = GetMesh("triangle");
 			tri.material = GetMaterial("defaultMesh");
 			glm::mat4 translation = glm::translate(glm::mat4{ 1.0f }, glm::vec3(x, 0.0f, y));
@@ -830,7 +939,7 @@ void VulkanEngine::Draw()
 	float flash = static_cast<float>( abs(sin(frameNumber / 120.0f)) );
 	clearValue.color = { { 0.0f, 0.0f, flash, 1.0f } };
 
-	VkClearValue depthClear;
+	VkClearValue depthClear = {};
 	depthClear.depthStencil.depth = 1.0f;
 
 	VkRenderPassBeginInfo rpInfo = {};

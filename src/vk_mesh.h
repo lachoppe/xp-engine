@@ -25,7 +25,7 @@ struct Vertex
 struct Mesh
 {
 	std::vector<Vertex> vertices;
-	AllocatedBuffer vertexBuffer;
+	AllocatedBuffer vertexBuffer{ nullptr, nullptr };
 	glm::vec3 objPosMin{ 0.0f };
 	glm::vec3 objPosMax{ 0.0f };
 

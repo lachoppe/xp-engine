@@ -63,11 +63,23 @@ struct DeletionQueue
 };
 
 
+struct GPUCameraData
+{
+	glm::mat4 view;
+	glm::mat4 proj;
+	glm::mat4 viewProj;
+};
+
+
 struct FrameData
 {
 	VkSemaphore presentSemaphore{ nullptr };
 	VkSemaphore renderSemaphore{ nullptr };
 	VkFence renderFence{ nullptr };
+
+	AllocatedBuffer cameraBuffer{ nullptr, nullptr };
+
+	VkDescriptorSet globalDescriptor;
 
 	VkCommandPool commandPool{ nullptr };
 	VkCommandBuffer mainCommandBuffer{ nullptr };
@@ -116,6 +128,9 @@ public:
 	VkRenderPass renderPass{ nullptr };
 	std::vector<VkFramebuffer> frameBuffers;
 
+	VkDescriptorSetLayout globalSetLayout;
+	VkDescriptorPool descriptorPool;
+
 	FrameData frames[FRAME_OVERLAP];
 
 	bool useDvorak = true;
@@ -127,7 +142,9 @@ public:
 	std::unordered_map<std::string, Material> materials;
 	std::unordered_map<std::string, Mesh> meshes;
 
+	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 	Material* CreateMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name);
+
 	Material* GetMaterial(const std::string& name);
 	Mesh* GetMesh(const std::string& name);
 	FrameData& GetCurrentFrame();
@@ -151,6 +168,7 @@ private:
 	void InitDefaultRenderPass();
 	void InitFramebuffers();
 	void InitSyncStructures();
+	void InitDescriptors();
 	void InitPipelines();
 	void InitScene();
 
