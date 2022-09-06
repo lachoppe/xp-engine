@@ -71,6 +71,16 @@ struct GPUCameraData
 };
 
 
+struct GPUSceneData
+{
+	glm::vec4 fogColor;			// w: exponent
+	glm::vec4 fogDistances;		// x: min, y: max, zw: unused
+	glm::vec4 ambientColor;
+	glm::vec4 sunlightDir;		// w: intensity
+	glm::vec4 sunlightColor;
+};
+
+
 struct FrameData
 {
 	VkSemaphore presentSemaphore{ nullptr };
@@ -93,6 +103,7 @@ class VulkanEngine
 public:
 
 	bool isInitialized{ false };
+	VkPhysicalDeviceProperties gpuProperties;
 	int frameNumber{ 0 };
 	uint64_t lastFrameTimeMS{ 0 };
 	int lastSecFrameNumber{ 0 };
@@ -131,6 +142,9 @@ public:
 	VkDescriptorSetLayout globalSetLayout;
 	VkDescriptorPool descriptorPool;
 
+	GPUSceneData sceneParameters;
+	AllocatedBuffer sceneParameterBuffer;
+
 	FrameData frames[FRAME_OVERLAP];
 
 	bool useDvorak = true;
@@ -141,6 +155,8 @@ public:
 	std::vector<RenderObject> renderables;
 	std::unordered_map<std::string, Material> materials;
 	std::unordered_map<std::string, Mesh> meshes;
+
+	size_t PadUniformBufferSIze(size_t originalSize);
 
 	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 	Material* CreateMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name);
