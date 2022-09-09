@@ -93,9 +93,6 @@ struct FrameData
 	VkSemaphore renderSemaphore{ nullptr };
 	VkFence renderFence{ nullptr };
 
-	AllocatedBuffer cameraBuffer{ nullptr, nullptr };
-	VkDescriptorSet globalDescriptor;
-
 	AllocatedBuffer objectBuffer{ nullptr, nullptr };
 	VkDescriptorSet objectDescriptor;
 
@@ -150,9 +147,9 @@ public:
 	VkDescriptorSetLayout globalSetLayout;
 	VkDescriptorSetLayout objectSetLayout;
 	VkDescriptorPool descriptorPool;
+	VkDescriptorSet globalDescriptor;
 
-	GPUSceneData sceneParameters;
-	AllocatedBuffer sceneParameterBuffer;
+	AllocatedBuffer cameraSceneDataBuffer;
 
 	FrameData frames[FRAME_OVERLAP];
 
@@ -165,7 +162,7 @@ public:
 	std::unordered_map<std::string, Material> materials;
 	std::unordered_map<std::string, Mesh> meshes;
 
-	size_t PadUniformBufferSIze(size_t originalSize);
+	size_t PadUniformBufferSize(size_t originalSize);
 
 	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 	Material* CreateMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name);
