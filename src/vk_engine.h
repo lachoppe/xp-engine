@@ -99,6 +99,14 @@ struct GPUObjectData
 };
 
 
+struct UploadContext
+{
+	VkFence uploadFence;
+	VkCommandPool commandPool;
+	VkCommandBuffer commandBuffer;
+};
+
+
 struct FrameData
 {
 	VkSemaphore presentSemaphore{ nullptr };
@@ -140,6 +148,8 @@ public:
 	VkPhysicalDevice chosenGPU{ nullptr };
 	VkDevice device{ nullptr };
 	VkSurfaceKHR surface{ nullptr };
+
+	UploadContext uploadContext;
 
 	VkSwapchainKHR swapchain{ nullptr };
 	VkFormat swapchainImageFormat;
@@ -208,6 +218,8 @@ private:
 	void InitScene();
 
 	void UploadMesh(Mesh& mesh);
+
+	void ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
 };
 
 

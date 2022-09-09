@@ -423,26 +423,70 @@ void VulkanEngine::UploadMesh(Mesh& mesh)
 {
 	const size_t bufferSizeBytes = mesh.vertices.size() * sizeof(Vertex);
 
-	VkBufferCreateInfo bufferInfo = {};
-	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	VkBufferCreateInfo stagingBufferInfo = {};
+	stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 
-	bufferInfo.size = bufferSizeBytes;
-	bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	stagingBufferInfo.size = bufferSizeBytes;
+	stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 
 	VmaAllocationCreateInfo vmaAllocInfo = {};
-	vmaAllocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+	vmaAllocInfo.usage = VMA_MEMORY_USAGE_CPU_ONLY;
 
-	VK_CHECK(vmaCreateBuffer(allocator, &bufferInfo, &vmaAllocInfo, &mesh.vertexBuffer.buffer, &mesh.vertexBuffer.allocation, nullptr));
+	AllocatedBuffer stagingBuffer;
+	VK_CHECK(vmaCreateBuffer(allocator, &stagingBufferInfo, &vmaAllocInfo, &stagingBuffer.buffer, &stagingBuffer.allocation, nullptr));
+
+ 	void* data;
+ 	vmaMapMemory(allocator, stagingBuffer.allocation, &data);
+ 	memcpy(data, mesh.vertices.data(), bufferSizeBytes);
+ 	vmaUnmapMemory(allocator, stagingBuffer.allocation);
+
+	VkBufferCreateInfo vertexBufferInfo = {};
+	vertexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	vertexBufferInfo.size = bufferSizeBytes;
+	vertexBufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+	vmaAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+	VK_CHECK(vmaCreateBuffer(allocator, &vertexBufferInfo, &vmaAllocInfo, &mesh.vertexBuffer.buffer, &mesh.vertexBuffer.allocation, nullptr));
+
+	// Perform immediate blocking copy
+	ImmediateSubmit([=](VkCommandBuffer cmd)
+		{
+			VkBufferCopy copy = {};
+			copy.size = bufferSizeBytes;
+			vkCmdCopyBuffer(cmd, stagingBuffer.buffer, mesh.vertexBuffer.buffer, 1, &copy);
+		});
 
 	mainDeletionQueue.PushFunction([=]()
 		{
 			vmaDestroyBuffer(allocator, mesh.vertexBuffer.buffer, mesh.vertexBuffer.allocation);
 		});
 
-	void* data;
-	vmaMapMemory(allocator, mesh.vertexBuffer.allocation, &data);
-	memcpy(data, mesh.vertices.data(), bufferSizeBytes);
-	vmaUnmapMemory(allocator, mesh.vertexBuffer.allocation);
+	vmaDestroyBuffer(allocator, stagingBuffer.buffer, stagingBuffer.allocation);
+}
+
+
+void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function)
+{
+	// Perform a blocking operation, waiting on a GPU fence, outside the render loop or other synchronization.
+	// Suitable for running from a background thread (eg, resource upload).
+
+	VkCommandBuffer cmd = uploadContext.commandBuffer;
+	VkCommandBufferBeginInfo cmdBeginInfo = vkinit::CommandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
+
+	function(cmd);
+
+	VK_CHECK(vkEndCommandBuffer(cmd));
+
+	VkSubmitInfo submit = vkinit::SubmitInfo(&cmd);
+
+	VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &submit, uploadContext.uploadFence));
+
+	vkWaitForFences(device, 1, &uploadContext.uploadFence, VK_TRUE, 9999999999);
+	vkResetFences(device, 1, &uploadContext.uploadFence);
+
+	vkResetCommandPool(device, uploadContext.commandPool, 0);
 }
 
 
@@ -556,6 +600,16 @@ void VulkanEngine::InitCommands()
 				vkDestroyCommandPool(device, frames[i].commandPool, nullptr);
 			});
 	}
+
+	VkCommandPoolCreateInfo uploadCommandPoolInfo = vkinit::CommandPoolCreateInfo(graphicsQueueFamily);
+	VK_CHECK(vkCreateCommandPool(device, &uploadCommandPoolInfo, nullptr, &uploadContext.commandPool));
+	mainDeletionQueue.PushFunction([=]()
+		{
+			vkDestroyCommandPool(device, uploadContext.commandPool, nullptr);
+		});
+
+	VkCommandBufferAllocateInfo uploadCmdAllocInfo = vkinit::CommandBufferAllocateInfo(uploadContext.commandPool, 1);
+	VK_CHECK(vkAllocateCommandBuffers(device, &uploadCmdAllocInfo, &uploadContext.commandBuffer));
 }
 
 
@@ -692,6 +746,13 @@ void VulkanEngine::InitSyncStructures()
 				vkDestroySemaphore(device, frames[i].renderSemaphore, nullptr);
 			});
 	}
+
+	VkFenceCreateInfo uploadFenceCreateInfo = vkinit::FenceCreateInfo();
+	VK_CHECK(vkCreateFence(device, &uploadFenceCreateInfo, NULL, &uploadContext.uploadFence));
+	mainDeletionQueue.PushFunction([=]()
+		{
+			vkDestroyFence(device, uploadContext.uploadFence, nullptr);
+		});
 }
 
 

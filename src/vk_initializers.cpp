@@ -224,3 +224,22 @@ VkWriteDescriptorSet vkinit::WriteDescriptorBuffer(VkDescriptorType type, VkDesc
 
 	return write;
 }
+
+VkCommandBufferBeginInfo vkinit::CommandBufferBeginInfo(VkCommandBufferUsageFlags flags)
+{
+	VkCommandBufferBeginInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	info.flags = 0;
+
+	return info;
+}
+
+VkSubmitInfo vkinit::SubmitInfo(VkCommandBuffer* cmd)
+{
+	VkSubmitInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	info.commandBufferCount = 1;
+	info.pCommandBuffers = cmd;
+
+	return info;
+}
