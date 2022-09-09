@@ -79,7 +79,34 @@ void OutputMessage(const wchar_t* format, ...)
 }
 
 
-size_t VulkanEngine::PadUniformBufferSize(size_t originalSize)
+void PaddedSizes::Reset()
+{
+	padded.clear();
+	sum = 0;
+}
+
+size_t PaddedSizes::Add(const VulkanEngine* engine, size_t bytes)
+{
+	size_t paddedBytes = engine->PadUniformBufferSize(bytes);
+	padded.push_back(paddedBytes);
+	sum += paddedBytes;
+	return paddedBytes;
+}
+
+size_t PaddedSizes::GetSum() const
+{
+	return sum;
+}
+
+size_t PaddedSizes::GetSizeOf(int i) const
+{
+	if (i < 0 || i >= padded.size())
+		return 0;
+	return padded[i];
+}
+
+
+size_t VulkanEngine::PadUniformBufferSize(size_t originalSize) const
 {
 	const size_t minBufferAlignment = gpuProperties.limits.minUniformBufferOffsetAlignment;
 	size_t alignedSize = originalSize;
@@ -154,7 +181,7 @@ void VulkanEngine::DrawObjects(VkCommandBuffer cmd, RenderObject* first, int cou
 	glm::mat4 projection = glm::perspective(glm::radians(fieldOfView), static_cast<float>(windowExtent.width) / static_cast<float>(windowExtent.height), 0.1f, 200.0f);
 	projection[1][1] *= -1;
 
-	GPUCameraData camValue;
+	GPUCameraData camValue = {};
 	camValue.proj = projection;
 	camValue.view = view;
 	camValue.viewProj = projection * view;
@@ -169,7 +196,7 @@ void VulkanEngine::DrawObjects(VkCommandBuffer cmd, RenderObject* first, int cou
 	BYTE* data = reinterpret_cast<BYTE*>(dataRaw);
 
 	// Update to current frame
-	const size_t camSceneFrameSize = PadUniformBufferSize(sizeof(GPUCameraData)) + PadUniformBufferSize(sizeof(GPUSceneData));
+	const size_t camSceneFrameSize = cameraSceneFrameSize.GetSum();
 	const int frameIndex = frameNumber % FRAME_OVERLAP;
 	
 	// Seek to start of current frame camera data
@@ -180,7 +207,7 @@ void VulkanEngine::DrawObjects(VkCommandBuffer cmd, RenderObject* first, int cou
 	*camData = camValue;
 
 	// Seek to start of scene data
-	data += PadUniformBufferSize(sizeof(GPUCameraData));
+	data += cameraSceneFrameSize.GetSizeOf(0);
 
 	// Record current frame scene data
 	GPUSceneData* sceneData = reinterpret_cast<GPUSceneData*>(data);
@@ -696,7 +723,9 @@ void VulkanEngine::InitDescriptors()
 	setInfo.pBindings = bindings;
 	vkCreateDescriptorSetLayout(device, &setInfo, nullptr, &globalSetLayout);
 
-	const size_t camSceneBufferSize = FRAME_OVERLAP * (PadUniformBufferSize(sizeof(GPUCameraData)) + PadUniformBufferSize(sizeof(GPUSceneData)));
+	cameraSceneFrameSize.Add(this, sizeof(GPUCameraData));
+	cameraSceneFrameSize.Add(this, sizeof(GPUSceneData));
+	const size_t camSceneBufferSize = FRAME_OVERLAP * cameraSceneFrameSize.GetSum();
 	cameraSceneDataBuffer = CreateBuffer(camSceneBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 
@@ -728,17 +757,17 @@ void VulkanEngine::InitDescriptors()
 		vkAllocateDescriptorSets(device, &objectAllocInfo, &frames[i].objectDescriptor);
 
 
-		VkDescriptorBufferInfo cameraInfo;
+		VkDescriptorBufferInfo cameraInfo = {};
 		cameraInfo.buffer = cameraSceneDataBuffer.buffer;
 		cameraInfo.offset = 0;
 		cameraInfo.range = sizeof(GPUCameraData);
 
-		VkDescriptorBufferInfo sceneInfo;
+		VkDescriptorBufferInfo sceneInfo = {};
 		sceneInfo.buffer = cameraSceneDataBuffer.buffer;
-		sceneInfo.offset = PadUniformBufferSize(sizeof(GPUCameraData));
+		sceneInfo.offset = cameraSceneFrameSize.GetSizeOf(0);
 		sceneInfo.range = sizeof(GPUSceneData);
 
-		VkDescriptorBufferInfo objectInfo;
+		VkDescriptorBufferInfo objectInfo = {};
 		objectInfo.buffer = frames[i].objectBuffer.buffer;
 		objectInfo.offset = 0;
 		objectInfo.range = sizeof(GPUObjectData) * MAX_OBJECTS;

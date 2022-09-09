@@ -63,6 +63,18 @@ struct DeletionQueue
 };
 
 
+struct PaddedSizes
+{
+	std::vector<size_t> padded;
+	size_t sum{ 0 };
+
+	void Reset();
+	size_t Add(const class VulkanEngine* engine, size_t bytes);
+	size_t GetSum() const;
+	size_t GetSizeOf(int i) const;
+};
+
+
 struct GPUCameraData
 {
 	glm::mat4 view;
@@ -150,6 +162,7 @@ public:
 	VkDescriptorSet globalDescriptor;
 
 	AllocatedBuffer cameraSceneDataBuffer;
+	PaddedSizes cameraSceneFrameSize;
 
 	FrameData frames[FRAME_OVERLAP];
 
@@ -162,7 +175,7 @@ public:
 	std::unordered_map<std::string, Material> materials;
 	std::unordered_map<std::string, Mesh> meshes;
 
-	size_t PadUniformBufferSize(size_t originalSize);
+	size_t PadUniformBufferSize(size_t originalSize) const;
 
 	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 	Material* CreateMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name);
