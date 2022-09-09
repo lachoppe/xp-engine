@@ -81,6 +81,12 @@ struct GPUSceneData
 };
 
 
+struct GPUObjectData
+{
+	glm::mat4 model;
+};
+
+
 struct FrameData
 {
 	VkSemaphore presentSemaphore{ nullptr };
@@ -88,8 +94,10 @@ struct FrameData
 	VkFence renderFence{ nullptr };
 
 	AllocatedBuffer cameraBuffer{ nullptr, nullptr };
-
 	VkDescriptorSet globalDescriptor;
+
+	AllocatedBuffer objectBuffer{ nullptr, nullptr };
+	VkDescriptorSet objectDescriptor;
 
 	VkCommandPool commandPool{ nullptr };
 	VkCommandBuffer mainCommandBuffer{ nullptr };
@@ -140,6 +148,7 @@ public:
 	std::vector<VkFramebuffer> frameBuffers;
 
 	VkDescriptorSetLayout globalSetLayout;
+	VkDescriptorSetLayout objectSetLayout;
 	VkDescriptorPool descriptorPool;
 
 	GPUSceneData sceneParameters;
