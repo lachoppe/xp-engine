@@ -27,6 +27,13 @@ struct Material
 };
 
 
+struct Texture
+{
+	AllocatedImage image;
+	VkImageView imageView;
+};
+
+
 struct RenderObject
 {
 	Mesh* mesh;
@@ -160,6 +167,8 @@ public:
 	AllocatedImage depthImage;
 	VkImageView depthImageView;
 
+	std::unordered_map<std::string, Texture> loadedTextures;
+
 	VkQueue graphicsQueue;
 	uint32_t graphicsQueueFamily;
 
@@ -197,6 +206,8 @@ public:
 	void UpdateCamera();
 	void DrawObjects(VkCommandBuffer cmd, RenderObject* first, int count);
 
+	void ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
+
 	void Init();
 	void Run();
 	void Draw();
@@ -206,6 +217,7 @@ private:
 
 	bool LoadShaderModule(const char* filePath, VkShaderModule* outShaderModule);
 	void LoadMeshes();
+	void LoadImages();
 
 	void InitVulkan();
 	void InitSwapchain();
@@ -218,8 +230,6 @@ private:
 	void InitScene();
 
 	void UploadMesh(Mesh& mesh);
-
-	void ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
 };
 
 

@@ -9,6 +9,7 @@
 
 #include "vk_types.h"
 #include "vk_initializers.h"
+#include "vk_textures.h"
 
 #include "VKBootstrap.h"
 
@@ -297,6 +298,7 @@ void VulkanEngine::Init()
 	InitPipelines();
 
 	LoadMeshes();
+	LoadImages();
 
 	InitScene();
 
@@ -415,6 +417,20 @@ void VulkanEngine::LoadMeshes()
 			UploadMesh(mesh);
 			meshes[(*it).first.c_str()] = mesh;
 		}
+	}
+}
+
+
+void VulkanEngine::LoadImages()
+{
+	Texture lostEmpire;
+
+	if (vkutil::LoadImageFromFile(*this, "../assets/lost_empire-RGBA.png", lostEmpire.image))
+	{
+		VkImageViewCreateInfo imageInfo = vkinit::ImageViewCreateInfo(VK_FORMAT_R8G8B8A8_SRGB, lostEmpire.image.image, VK_IMAGE_ASPECT_COLOR_BIT);
+		vkCreateImageView(device, &imageInfo, NULL, &lostEmpire.imageView);
+
+		loadedTextures["empire_diffuse"] = lostEmpire;
 	}
 }
 
