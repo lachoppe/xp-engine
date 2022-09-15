@@ -34,9 +34,16 @@ VertexInputDescription Vertex::GetVertexDescription()
 	colorAttribute.format = VK_FORMAT_R32G32B32_SFLOAT;
 	colorAttribute.offset = offsetof(Vertex, color);
 
+	VkVertexInputAttributeDescription uvAttribute = {};
+	uvAttribute.binding = 0;
+	uvAttribute.location = 3;
+	uvAttribute.format = VK_FORMAT_R32G32_SFLOAT;
+	uvAttribute.offset = offsetof(Vertex, uv);
+
 	description.attributes.push_back(positionAttribute);
 	description.attributes.push_back(normalAttribute);
 	description.attributes.push_back(colorAttribute);
+	description.attributes.push_back(uvAttribute);
 
 	return description;
 }
@@ -64,6 +71,15 @@ bool Mesh::LoadFromObj(const char* filename)
 		return false;
 	}
 
+	const bool hasNormals = attrib.normals.size() > 0;
+	const bool hasUVs = attrib.texcoords.size() > 0;
+	// Fallback values
+	tinyobj::real_t nx = 0.0f;
+	tinyobj::real_t ny = 0.0f;
+	tinyobj::real_t nz = 0.0f;
+	tinyobj::real_t ux = 0.0f;
+	tinyobj::real_t uy = 0.0f;
+
 	for (size_t s = 0; s < shapes.size(); s++)
 	{
 		size_t indexOffset = 0;
@@ -80,9 +96,18 @@ bool Mesh::LoadFromObj(const char* filename)
 				tinyobj::real_t vy = attrib.vertices[3 * idx.vertex_index + 1];
 				tinyobj::real_t vz = attrib.vertices[3 * idx.vertex_index + 2];
 
-				tinyobj::real_t nx = attrib.normals[3 * idx.normal_index + 0];
-				tinyobj::real_t ny = attrib.normals[3 * idx.normal_index + 1];
-				tinyobj::real_t nz = attrib.normals[3 * idx.normal_index + 2];
+				if (hasNormals)
+				{
+					nx = attrib.normals[3 * idx.normal_index + 0];
+					ny = attrib.normals[3 * idx.normal_index + 1];
+					nz = attrib.normals[3 * idx.normal_index + 2];
+				}
+
+				if (hasUVs)
+				{
+					ux = attrib.texcoords[2 * idx.texcoord_index + 0];
+					uy = attrib.texcoords[2 * idx.texcoord_index + 1];
+				}
 
 				Vertex newVert;
 				newVert.position.x = vx;
@@ -91,6 +116,8 @@ bool Mesh::LoadFromObj(const char* filename)
 				newVert.normal.x = nx;
 				newVert.normal.y = ny;
 				newVert.normal.z = nz;
+				newVert.uv.x = ux;
+				newVert.uv.y = 1.0f - uy;	// Vulkan V is flipped from OBJ
 
 				// DEBUG normal as color
 				newVert.color = newVert.normal;

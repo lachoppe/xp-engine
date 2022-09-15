@@ -22,6 +22,7 @@ struct MeshPushConstants
 
 struct Material
 {
+	VkDescriptorSet textureSet{ VK_NULL_HANDLE };
 	VkPipeline pipeline;
 	VkPipelineLayout pipelineLayout;
 };
@@ -177,6 +178,7 @@ public:
 
 	VkDescriptorSetLayout globalSetLayout;
 	VkDescriptorSetLayout objectSetLayout;
+	VkDescriptorSetLayout singleTextureSetLayout;
 	VkDescriptorPool descriptorPool;
 	VkDescriptorSet globalDescriptor;
 

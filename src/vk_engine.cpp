@@ -243,6 +243,11 @@ void VulkanEngine::DrawObjects(VkCommandBuffer cmd, RenderObject* first, int cou
 			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipelineLayout, 0, 1, &globalDescriptor, 2, offsets);
 
 			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipelineLayout, 1, 1, &GetCurrentFrame().objectDescriptor, 0, nullptr);
+
+			if (object.material->textureSet != VK_NULL_HANDLE)
+			{
+				vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipelineLayout, 2, 1, &object.material->textureSet, 0, nullptr);
+			}
 		}
 
 		if (object.material == nullptr)
@@ -408,6 +413,7 @@ void VulkanEngine::LoadMeshes()
 // 	meshesToLoad["rabbit_low"]		= "../assets/rabbit_low.obj";
 // 	meshesToLoad["rabbit_med"]		= "../assets/rabbit_med.obj";
 	meshesToLoad["rabbit_high"]		= "../assets/rabbit_high.obj";
+	meshesToLoad["lost_empire"]		= "../assets/lost_empire.obj";
 
 	for (auto it = meshesToLoad.begin(); it != meshesToLoad.end(); ++it)
 	{
@@ -778,7 +784,8 @@ void VulkanEngine::InitDescriptors()
 	{
 		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 },
 		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 10 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10 }
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10 },
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 10 }
 	};
 
 	VkDescriptorPoolCreateInfo poolInfo = {};
@@ -812,6 +819,14 @@ void VulkanEngine::InitDescriptors()
 	objectSetInfo.bindingCount = 1;
 	objectSetInfo.pBindings = &objectBinding;
 	vkCreateDescriptorSetLayout(device, &objectSetInfo, nullptr, &objectSetLayout);
+
+
+	VkDescriptorSetLayoutBinding textureBind = vkinit::DescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0);
+	VkDescriptorSetLayoutCreateInfo set3Info = {};
+	set3Info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	set3Info.bindingCount = 1;
+	set3Info.pBindings = &textureBind;
+	vkCreateDescriptorSetLayout(device, &set3Info, nullptr, &singleTextureSetLayout);
 
 
 	VkDescriptorSetAllocateInfo allocInfo = {};
@@ -868,6 +883,7 @@ void VulkanEngine::InitDescriptors()
 
 	mainDeletionQueue.PushFunction([=]()
 		{
+			vkDestroyDescriptorSetLayout(device, singleTextureSetLayout, nullptr);
 			vkDestroyDescriptorSetLayout(device, objectSetLayout, nullptr);
 			vkDestroyDescriptorSetLayout(device, globalSetLayout, nullptr);
 			vkDestroyDescriptorPool(device, descriptorPool, nullptr);
@@ -879,6 +895,9 @@ void VulkanEngine::InitDescriptors()
 void VulkanEngine::InitPipelines()
 {
 	// Shader load (match with cleanup)
+	VkShaderModule texturedLitFragShader;
+	LoadShaderModule("textured_lit.frag", &texturedLitFragShader);
+
 	VkShaderModule defaultLitFragShader;
 	LoadShaderModule("default_lit.frag", &defaultLitFragShader);
 
@@ -925,6 +944,7 @@ void VulkanEngine::InitPipelines()
 	VkPipeline redTrianglePipeline;
 	VkPipeline meshPipeline;
 	VkPipeline greyMeshPipeline;
+	VkPipeline texMeshPipeline;
 	VkPipelineLayout meshPipelineLayout;
 
 
@@ -990,6 +1010,23 @@ void VulkanEngine::InitPipelines()
 
 
 
+	// Textured version
+	VkPipelineLayoutCreateInfo texturedPipelineLayoutInfo = meshPipelineLayoutInfo;
+	VkDescriptorSetLayout texturedSetLayouts[] = { globalSetLayout, objectSetLayout, singleTextureSetLayout };
+	texturedPipelineLayoutInfo.setLayoutCount = 3;
+	texturedPipelineLayoutInfo.pSetLayouts = texturedSetLayouts;
+
+	VkPipelineLayout texturedPipeLayout;
+	VK_CHECK(vkCreatePipelineLayout(device, &texturedPipelineLayoutInfo, nullptr, &texturedPipeLayout));
+	pipelineBuilder.shaderStages.clear();
+	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_VERTEX_BIT, meshVertShader));
+	pipelineBuilder.shaderStages.push_back(vkinit::ShaderStateCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, texturedLitFragShader));
+	pipelineBuilder.pipelineLayout = texturedPipeLayout;
+	texMeshPipeline = pipelineBuilder.BuildPipeline(device, renderPass);
+	CreateMaterial(texMeshPipeline, texturedPipeLayout, "texturedMesh");
+
+
+
 	// Shader load cleanup
 	vkDestroyShaderModule(device, meshVertShader, nullptr);
 	vkDestroyShaderModule(device, redTriangleVertShader, nullptr);
@@ -998,9 +1035,11 @@ void VulkanEngine::InitPipelines()
 	vkDestroyShaderModule(device, coloredTriangleFragShader, nullptr);
 	vkDestroyShaderModule(device, greyscaleTriangleFragShader, nullptr);
 	vkDestroyShaderModule(device, defaultLitFragShader, nullptr);
+	vkDestroyShaderModule(device, texturedLitFragShader, nullptr);
 
 	mainDeletionQueue.PushFunction([=]()
 		{
+			vkDestroyPipeline(device, texMeshPipeline, nullptr);
 			vkDestroyPipeline(device, greyMeshPipeline, nullptr);
 			vkDestroyPipeline(device, meshPipeline, nullptr);
 			vkDestroyPipeline(device, redTrianglePipeline, nullptr);
@@ -1008,6 +1047,7 @@ void VulkanEngine::InitPipelines()
 
 			vkDestroyPipelineLayout(device, trianglePipelineLayout, nullptr);
 			vkDestroyPipelineLayout(device, meshPipelineLayout, nullptr);
+			vkDestroyPipelineLayout(device, texturedPipeLayout, nullptr);
 		});
 }
 
@@ -1016,65 +1056,103 @@ void VulkanEngine::InitScene()
 {
 	camPos = { 0.0f, -6.0f, -10.0f };
 
-	std::vector<std::string> meshNames;
-	meshNames.push_back("monkey");
-	meshNames.push_back("apple");
-	meshNames.push_back("rabbit_high");
-
-	std::vector<Mesh*> meshes;
-	for (auto it = meshNames.begin(); it != meshNames.end(); ++it)
+	// Giant mesh grid
+	if (false)
 	{
-		Mesh* mesh = GetMesh((*it).c_str());
-		if (mesh == nullptr)
-			continue;
-		meshes.push_back(mesh);
-	}
+		std::vector<std::string> meshNames;
+		meshNames.push_back("monkey");
+		meshNames.push_back("apple");
+		meshNames.push_back("rabbit_high");
 
-	if (!meshes.empty())
-	{
-		// Expensive full mesh
-//		const int meshVolumeDim = 20;
-//		const float meshVolumeWidth = 200.0f;
-
-		// Cheaper small mesh
- 		const int meshVolumeDim = 10;
- 		const float meshVolumeWidth = 100.0f;
-
-		const float step = meshVolumeWidth / meshVolumeDim;
-		const glm::vec3 start{ -meshVolumeWidth * 0.5f };
-		int meshIndex = 0;
-		for (int x = 0; x < meshVolumeDim; ++x)
+		std::vector<Mesh*> meshes;
+		for (auto it = meshNames.begin(); it != meshNames.end(); ++it)
 		{
-			for (int y = 0; y < meshVolumeDim; ++y)
-			{
-				for (int z = 0; z < meshVolumeDim; ++z)
-				{
-					RenderObject ro = {};
-					ro.mesh = meshes[meshIndex];
-					ro.material = ((x + y + z) % 2) ? GetMaterial("greyMesh") : GetMaterial("defaultMesh");
-					glm::vec3 pos{ start.x + x * step, start.y + y * step, start.z + z * step };
-					ro.transformMatrix = glm::translate(glm::mat4{ 1.0f }, pos - ro.mesh->GetObjectCenter());
-					renderables.push_back(ro);
+			Mesh* mesh = GetMesh((*it).c_str());
+			if (mesh == nullptr)
+				continue;
+			meshes.push_back(mesh);
+		}
 
-					meshIndex = (meshIndex + 1) % static_cast<int>(meshes.size());
+		if (!meshes.empty())
+		{
+			// Expensive full mesh
+	//		const int meshVolumeDim = 20;
+	//		const float meshVolumeWidth = 200.0f;
+
+			// Cheaper small mesh
+			const int meshVolumeDim = 10;
+			const float meshVolumeWidth = 100.0f;
+
+			const float step = meshVolumeWidth / meshVolumeDim;
+			const glm::vec3 start{ -meshVolumeWidth * 0.5f };
+			int meshIndex = 0;
+			for (int x = 0; x < meshVolumeDim; ++x)
+			{
+				for (int y = 0; y < meshVolumeDim; ++y)
+				{
+					for (int z = 0; z < meshVolumeDim; ++z)
+					{
+						RenderObject ro = {};
+						ro.mesh = meshes[meshIndex];
+						ro.material = ((x + y + z) % 2) ? GetMaterial("greyMesh") : GetMaterial("defaultMesh");
+						glm::vec3 pos{ start.x + x * step, start.y + y * step, start.z + z * step };
+						ro.transformMatrix = glm::translate(glm::mat4{ 1.0f }, pos - ro.mesh->GetObjectCenter());
+						renderables.push_back(ro);
+
+						meshIndex = (meshIndex + 1) % static_cast<int>(meshes.size());
+					}
 				}
+			}
+		}
+
+		for (int x = -20; x <= 20; ++x)
+		{
+			for (int y = -20; y <= 20; ++y)
+			{
+				RenderObject tri = {};
+				tri.mesh = GetMesh("triangle");
+				tri.material = GetMaterial("defaultMesh");
+				glm::mat4 translation = glm::translate(glm::mat4{ 1.0f }, glm::vec3(x, 0.0f, y));
+				glm::mat4 scale = glm::scale(glm::mat4{ 1.0f }, glm::vec3(0.2f, 0.2f, 0.2f));
+				tri.transformMatrix = translation * scale;
+
+				renderables.push_back(tri);
 			}
 		}
 	}
 
-	for (int x = -20; x <= 20; ++x)
+	// Lost Empire minecraft map
+	if (true)
 	{
-		for (int y = -20; y <= 20; ++y)
-		{
-			RenderObject tri = {};
-			tri.mesh = GetMesh("triangle");
-			tri.material = GetMaterial("defaultMesh");
-			glm::mat4 translation = glm::translate(glm::mat4{ 1.0f }, glm::vec3(x, 0.0f, y));
-			glm::mat4 scale = glm::scale(glm::mat4{ 1.0f }, glm::vec3(0.2f, 0.2f, 0.2f));
-			tri.transformMatrix = translation * scale;
+		RenderObject map = {};
+		map.mesh = GetMesh("lost_empire");
+		map.material = GetMaterial("texturedMesh");
+		map.transformMatrix = glm::translate(glm::vec3(5.0f, -10.0f, 0.0f));
 
-			renderables.push_back(tri);
-		}
+		VkSampler sampler;
+		VkSamplerCreateInfo samplerInfo = vkinit::SamplerCreateInfo(VK_FILTER_NEAREST);
+		vkCreateSampler(device, &samplerInfo, nullptr, &sampler);
+
+		mainDeletionQueue.PushFunction([=]()
+			{
+				vkDestroySampler(device, sampler, nullptr);
+			});
+
+		VkDescriptorSetAllocateInfo allocInfo = {};
+		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		allocInfo.descriptorPool = descriptorPool;
+		allocInfo.descriptorSetCount = 1;
+		allocInfo.pSetLayouts = &singleTextureSetLayout;
+		vkAllocateDescriptorSets(device, &allocInfo, &map.material->textureSet);
+
+		VkDescriptorImageInfo imageBufferInfo;
+		imageBufferInfo.sampler = sampler;
+		imageBufferInfo.imageView = loadedTextures["empire_diffuse"].imageView;
+		imageBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		VkWriteDescriptorSet texture1 = vkinit::WriteDescriptorImage(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, map.material->textureSet, &imageBufferInfo, 0);
+		vkUpdateDescriptorSets(device, 1, &texture1, 0, nullptr);
+
+		renderables.push_back(map);
 	}
 }
 
@@ -1084,6 +1162,11 @@ void VulkanEngine::Cleanup()
 	if (isInitialized)
 	{
 		vkDeviceWaitIdle(device);
+
+		for (auto texIter = loadedTextures.begin(); texIter != loadedTextures.end(); ++texIter)
+		{
+			vkDestroyImageView(device, texIter->second.imageView, nullptr);
+		}
 
 		mainDeletionQueue.Flush();
 
