@@ -20,8 +20,8 @@
 #include "glm/gtx/transform.hpp"
 
 #include "../third_party/imgui/imgui.h"
-#include "../third_party/imgui/imgui_impl_sdl.h"
-#include "../third_party/imgui/imgui_impl_vulkan.h"
+#include "../third_party/imgui/backend/imgui_impl_sdl.h"
+#include "../third_party/imgui/backend/imgui_impl_vulkan.h"
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"

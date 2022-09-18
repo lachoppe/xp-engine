@@ -14,3 +14,5 @@ out/build/x64-Debug/
 .vs/
 
 out/build/x64-Release/
+
+bin/imgui.ini
