@@ -1251,6 +1251,35 @@ void VulkanEngine::Cleanup()
 }
 
 
+void VulkanEngine::DrawFPS()
+{
+	ImGuiIO& io = ImGui::GetIO();
+	ImGuiWindowFlags windowFlags = 
+		ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground
+		| ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove;
+
+	const float PAD = 0.0f;
+	const ImGuiViewport* viewport = ImGui::GetMainViewport();
+	ImVec2 workPos = viewport->WorkPos;
+	ImVec2 workSize = viewport->WorkSize;
+	ImVec2 windowPos;
+	// Top right
+	windowPos.x = workPos.x + workSize.x - PAD;
+	windowPos.y = workPos.y + PAD;
+	ImVec2 windowPosPivot;
+	windowPosPivot.x = 1.0f;
+	windowPosPivot.y = 0.0f;
+	ImGui::SetNextWindowPos(windowPos, ImGuiCond_Once, windowPosPivot);
+// 	ImGui::SetNextWindowViewport(viewport->ID);
+
+	if (ImGui::Begin("FPS OVERLAY", nullptr, windowFlags))
+	{
+		ImGui::TextColored(ImVec4(0.5f, 1.0f, 1.0f, 1.0f), "%4d", static_cast<uint32_t>(lastFPS));
+	}
+	ImGui::End();
+}
+
+
 void VulkanEngine::Draw()
 {
 	using namespace std::chrono;
@@ -1259,8 +1288,7 @@ void VulkanEngine::Draw()
 	{
 		int frameSecCount = frameNumber - lastSecFrameNumber;
 		uint64_t durationMS = ms - lastFrameTimeMS;
-		float fps = static_cast<float>(frameSecCount) / static_cast<float>(durationMS) * 1000.f;
-		OutputMessage("FPS: %4d frames / %4d ms = %.2f\n", frameSecCount, durationMS, fps);
+		lastFPS = static_cast<float>(frameSecCount) / static_cast<float>(durationMS) * 1000.f;
 		lastFrameTimeMS = ms;
 		lastSecFrameNumber = frameNumber;
 	}
@@ -1270,6 +1298,7 @@ void VulkanEngine::Draw()
 	VK_CHECK(vkWaitForFences(device, 1, &GetCurrentFrame().renderFence, true, timeoutNS));
 	VK_CHECK(vkResetFences(device, 1, &GetCurrentFrame().renderFence));
 
+	DrawFPS();
 	// End debug widget drawing, prepare buffers
 	ImGui::Render();
 
@@ -1430,8 +1459,6 @@ void VulkanEngine::Run()
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplSDL2_NewFrame(window);
 		ImGui::NewFrame();
-		// We can now call ImGui functions to draw debug widgets
-		ImGui::ShowDemoWindow();
 
 		UpdateCamera();
 		Draw();

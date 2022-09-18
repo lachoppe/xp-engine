@@ -140,6 +140,7 @@ public:
 	int frameNumber { 0 };
 	uint64_t lastFrameTimeMS { 0 };
 	int lastSecFrameNumber { 0 };
+	float lastFPS { 0.0f };
 	int selectedShader { 0 };
 
 	VmaAllocator allocator;
@@ -207,6 +208,8 @@ public:
 
 	void UpdateCamera();
 	void DrawObjects(VkCommandBuffer cmd, RenderObject* first, int count);
+
+	void DrawFPS();
 
 	void ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
 
