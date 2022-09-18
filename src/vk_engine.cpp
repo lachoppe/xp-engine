@@ -1207,6 +1207,9 @@ void VulkanEngine::InitImGui()
 
 	ImGui_ImplVulkan_Init(&initInfo, renderPass);
 
+	ImGuiIO& io = ImGui::GetIO();
+	io.Fonts->AddFontFromFileTTF("../assets/fonts/Cousine-Regular.ttf", 13);
+
 	ImmediateSubmit([&](VkCommandBuffer cmd)
 		{
 			ImGui_ImplVulkan_CreateFontsTexture(cmd);
