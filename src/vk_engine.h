@@ -22,23 +22,23 @@ struct MeshPushConstants
 
 struct Material
 {
-	VkDescriptorSet textureSet{ VK_NULL_HANDLE };
-	VkPipeline pipeline;
-	VkPipelineLayout pipelineLayout;
+	VkDescriptorSet textureSet { VK_NULL_HANDLE };
+	VkPipeline pipeline { VK_NULL_HANDLE };
+	VkPipelineLayout pipelineLayout { VK_NULL_HANDLE };
 };
 
 
 struct Texture
 {
-	AllocatedImage image;
-	VkImageView imageView;
+	AllocatedImage image {0};
+	VkImageView imageView { VK_NULL_HANDLE };
 };
 
 
 struct RenderObject
 {
-	Mesh* mesh;
-	Material* material;
+	Mesh* mesh { nullptr };
+	Material* material { nullptr };
 	glm::mat4 transformMatrix;
 
 	bool operator < (const RenderObject& other) const
@@ -117,15 +117,15 @@ struct UploadContext
 
 struct FrameData
 {
-	VkSemaphore presentSemaphore{ nullptr };
-	VkSemaphore renderSemaphore{ nullptr };
-	VkFence renderFence{ nullptr };
+	VkSemaphore presentSemaphore { nullptr };
+	VkSemaphore renderSemaphore { nullptr };
+	VkFence renderFence { nullptr };
 
-	AllocatedBuffer objectBuffer{ nullptr, nullptr };
+	AllocatedBuffer objectBuffer { nullptr, nullptr };
 	VkDescriptorSet objectDescriptor;
 
-	VkCommandPool commandPool{ nullptr };
-	VkCommandBuffer mainCommandBuffer{ nullptr };
+	VkCommandPool commandPool { nullptr };
+	VkCommandBuffer mainCommandBuffer { nullptr };
 };
 
 constexpr unsigned int FRAME_OVERLAP = 2;
@@ -135,31 +135,31 @@ class VulkanEngine
 {
 public:
 
-	bool isInitialized{ false };
+	bool isInitialized { false };
 	VkPhysicalDeviceProperties gpuProperties;
-	int frameNumber{ 0 };
-	uint64_t lastFrameTimeMS{ 0 };
-	int lastSecFrameNumber{ 0 };
-	int selectedShader{ 0 };
+	int frameNumber { 0 };
+	uint64_t lastFrameTimeMS { 0 };
+	int lastSecFrameNumber { 0 };
+	int selectedShader { 0 };
 
 	VmaAllocator allocator;
 	DeletionQueue mainDeletionQueue;
 
-	VkExtent2D windowExtent{ 1700, 900 };
-	struct SDL_Window* window{ nullptr };
-	float fieldOfView{ 70.0f };
-	glm::vec3 camPos{ 0.0f, 0.0f, 0.0f };
-	glm::vec3 camVel{ 0.0f, 0.0f, 0.0f };
+	VkExtent2D windowExtent { 1700, 900 };
+	struct SDL_Window* window { nullptr };
+	float fieldOfView { 70.0f };
+	glm::vec3 camPos { 0.0f, 0.0f, 0.0f };
+	glm::vec3 camVel { 0.0f, 0.0f, 0.0f };
 
-	VkInstance instance{ nullptr };
-	VkDebugUtilsMessengerEXT debugMessenger{ nullptr };
-	VkPhysicalDevice chosenGPU{ nullptr };
-	VkDevice device{ nullptr };
-	VkSurfaceKHR surface{ nullptr };
+	VkInstance instance { nullptr };
+	VkDebugUtilsMessengerEXT debugMessenger { nullptr };
+	VkPhysicalDevice chosenGPU { nullptr };
+	VkDevice device { nullptr };
+	VkSurfaceKHR surface { nullptr };
 
 	UploadContext uploadContext;
 
-	VkSwapchainKHR swapchain{ nullptr };
+	VkSwapchainKHR swapchain { nullptr };
 	VkFormat swapchainImageFormat;
 	std::vector<VkImage> swapchainImages;
 	std::vector<VkImageView> swapchainImageViews;
@@ -173,7 +173,7 @@ public:
 	VkQueue graphicsQueue;
 	uint32_t graphicsQueueFamily;
 
-	VkRenderPass renderPass{ nullptr };
+	VkRenderPass renderPass { nullptr };
 	std::vector<VkFramebuffer> frameBuffers;
 
 	VkDescriptorSetLayout globalSetLayout;
@@ -188,7 +188,7 @@ public:
 	FrameData frames[FRAME_OVERLAP];
 
 	bool useDvorak = true;
-	const unsigned char* keyboardState{ nullptr };
+	const unsigned char* keyboardState { nullptr };
 	int keyboardStateLen;
 
 	// scene
@@ -230,6 +230,7 @@ private:
 	void InitDescriptors();
 	void InitPipelines();
 	void InitScene();
+	void InitImGui();
 
 	void UploadMesh(Mesh& mesh);
 };
@@ -240,15 +241,15 @@ class PipelineBuilder
 public:
 
 	std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
-	VkPipelineVertexInputStateCreateInfo vertexInput;
-	VkPipelineInputAssemblyStateCreateInfo inputAssembly;
-	VkViewport viewport;
-	VkRect2D scissor;
-	VkPipelineRasterizationStateCreateInfo rasterizer;
-	VkPipelineColorBlendAttachmentState colorBlendAttachment;
-	VkPipelineMultisampleStateCreateInfo multisampling;
-	VkPipelineDepthStencilStateCreateInfo depthStencil;
-	VkPipelineLayout pipelineLayout;
+	VkPipelineVertexInputStateCreateInfo vertexInput {};
+	VkPipelineInputAssemblyStateCreateInfo inputAssembly {};
+	VkViewport viewport {};
+	VkRect2D scissor {};
+	VkPipelineRasterizationStateCreateInfo rasterizer {};
+	VkPipelineColorBlendAttachmentState colorBlendAttachment {};
+	VkPipelineMultisampleStateCreateInfo multisampling {};
+	VkPipelineDepthStencilStateCreateInfo depthStencil {};
+	VkPipelineLayout pipelineLayout {};
 
 	VkPipeline BuildPipeline(VkDevice device, VkRenderPass pass);
 };

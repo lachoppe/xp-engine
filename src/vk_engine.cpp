@@ -19,6 +19,10 @@
 
 #include "glm/gtx/transform.hpp"
 
+#include "../third_party/imgui/imgui.h"
+#include "../third_party/imgui/imgui_impl_sdl.h"
+#include "../third_party/imgui/imgui_impl_vulkan.h"
+
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
 
@@ -300,6 +304,9 @@ void VulkanEngine::Init()
 	InitFramebuffers();
 	InitSyncStructures();
 	InitDescriptors();
+	InitImGui();
+
+	// Content
 	InitPipelines();
 
 	LoadMeshes();
@@ -454,7 +461,7 @@ void VulkanEngine::UploadMesh(Mesh& mesh)
 	VmaAllocationCreateInfo vmaAllocInfo = {};
 	vmaAllocInfo.usage = VMA_MEMORY_USAGE_CPU_ONLY;
 
-	AllocatedBuffer stagingBuffer;
+	AllocatedBuffer stagingBuffer {0};
 	VK_CHECK(vmaCreateBuffer(allocator, &stagingBufferInfo, &vmaAllocInfo, &stagingBuffer.buffer, &stagingBuffer.allocation, nullptr));
 
  	void* data;
@@ -1145,7 +1152,7 @@ void VulkanEngine::InitScene()
 		allocInfo.pSetLayouts = &singleTextureSetLayout;
 		vkAllocateDescriptorSets(device, &allocInfo, &map.material->textureSet);
 
-		VkDescriptorImageInfo imageBufferInfo;
+		VkDescriptorImageInfo imageBufferInfo {0};
 		imageBufferInfo.sampler = sampler;
 		imageBufferInfo.imageView = loadedTextures["empire_diffuse"].imageView;
 		imageBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -1154,6 +1161,64 @@ void VulkanEngine::InitScene()
 
 		renderables.push_back(map);
 	}
+}
+
+
+void VulkanEngine::InitImGui()
+{
+	VkDescriptorPoolSize poolSizes[] =
+	{
+		{ VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+	};
+
+	VkDescriptorPoolCreateInfo poolInfo = {};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+	poolInfo.maxSets = 1000;
+	poolInfo.poolSizeCount = static_cast<uint32_t>(std::size(poolSizes));
+	poolInfo.pPoolSizes = poolSizes;
+
+	VkDescriptorPool imguiPool;
+	VK_CHECK(vkCreateDescriptorPool(device, &poolInfo, nullptr, &imguiPool));
+
+	ImGui::CreateContext();
+
+	ImGui_ImplSDL2_InitForVulkan(window);
+
+	ImGui_ImplVulkan_InitInfo initInfo = {};
+	initInfo.Instance = instance;
+	initInfo.PhysicalDevice = chosenGPU;
+	initInfo.Device = device;
+	initInfo.Queue = graphicsQueue;
+	initInfo.DescriptorPool = descriptorPool;
+	initInfo.MinImageCount = 3;
+	initInfo.ImageCount = 3;
+	initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+
+	ImGui_ImplVulkan_Init(&initInfo, renderPass);
+
+	ImmediateSubmit([&](VkCommandBuffer cmd)
+		{
+			ImGui_ImplVulkan_CreateFontsTexture(cmd);
+		});
+
+	ImGui_ImplVulkan_DestroyFontUploadObjects();
+
+	mainDeletionQueue.PushFunction([=]()
+		{
+			vkDestroyDescriptorPool(device, imguiPool, nullptr);
+			ImGui_ImplVulkan_Shutdown();
+		});
 }
 
 
@@ -1202,6 +1267,9 @@ void VulkanEngine::Draw()
 	VK_CHECK(vkWaitForFences(device, 1, &GetCurrentFrame().renderFence, true, timeoutNS));
 	VK_CHECK(vkResetFences(device, 1, &GetCurrentFrame().renderFence));
 
+	// End debug widget drawing, prepare buffers
+	ImGui::Render();
+
 	uint32_t swapchainImageIndex;
 	VK_CHECK(vkAcquireNextImageKHR(device, swapchain, timeoutNS, GetCurrentFrame().presentSemaphore, nullptr, &swapchainImageIndex));
 
@@ -1236,6 +1304,8 @@ void VulkanEngine::Draw()
 
 	std::sort(renderables.begin(), renderables.end());
 	DrawObjects(cmd, &renderables[0], static_cast<int>(renderables.size()));
+
+	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 
 	vkCmdEndRenderPass(cmd);
 
@@ -1335,6 +1405,8 @@ void VulkanEngine::Run()
 	{
 		while (SDL_PollEvent(&e) != 0)
 		{
+			ImGui_ImplSDL2_ProcessEvent(&e);
+
 			if (e.type == SDL_QUIT)
 			{
 				bQuit = true;
@@ -1351,6 +1423,12 @@ void VulkanEngine::Run()
 				}
 			}
 		}
+
+		ImGui_ImplVulkan_NewFrame();
+		ImGui_ImplSDL2_NewFrame(window);
+		ImGui::NewFrame();
+		// We can now call ImGui functions to draw debug widgets
+		ImGui::ShowDemoWindow();
 
 		UpdateCamera();
 		Draw();
