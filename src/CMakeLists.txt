@@ -19,17 +19,6 @@ set_property(TARGET vulkanTest PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_
 target_include_directories(vulkanTest PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(vulkanTest vkbootstrap vma glm tinyobjloader imgui stb_image)
 
-target_link_libraries(vulkanTest Vulkan::Vulkan sdl2)
+target_link_libraries(vulkanTest Vulkan::Vulkan sdl2 freetype)
 
 add_dependencies(vulkanTest Shaders)
-
-
-find_library(
-    FREETYPE_LIB
-    NAMES freetype
-    HINTS "$ENV{FREETYPE_SDK_PATH}\\release dll\\win64"
-    )
-SET(FREETYPE_INCLUDES "$ENV{FREETYPE_SDK_PATH}/include" "$ENV{FREETYPE_SDK_PATH}/include/freetype")
-target_include_directories(vulkanTest PUBLIC ${FREETYPE_INCLUDES})
-target_include_directories(imgui PUBLIC ${FREETYPE_INCLUDES})
-target_link_libraries(vulkanTest ${FREETYPE_LIB})

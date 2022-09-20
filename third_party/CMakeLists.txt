@@ -43,6 +43,26 @@ endif()
 
 target_link_libraries(sdl2 INTERFACE SDL2 SDL2main)
 
+
+
+
+add_library(freetype INTERFACE)
+set(freetype_DIR freetype CACHE PATH "Path to Freetype")
+
+
+if (WIN32)
+target_include_directories(freetype INTERFACE ${freetype_DIR}/include ${freetype_DIR}/include/freetype)
+target_link_directories(freetype INTERFACE ${freetype_DIR}/lib)
+elseif (UNIX)
+#target_include_directories(freetype INTERFACE ${freetype_DIR}/include ${freetype_DIR}/include/freetype)
+#target_link_directories(freetype INTERFACE ${freetype_DIR}/lib)
+endif()
+
+target_link_libraries(freetype INTERFACE freetype)
+
+
+
+
 add_library(imgui STATIC)
 
 target_include_directories(imgui PUBLIC imgui)
@@ -61,6 +81,6 @@ target_sources(imgui PRIVATE
     imgui/backend/imgui_impl_sdl.cpp
     )
 
-target_link_libraries(imgui PUBLIC Vulkan::Vulkan sdl2)
+target_link_libraries(imgui PUBLIC Vulkan::Vulkan sdl2 freetype)
 
 target_include_directories(stb_image INTERFACE stb_image)

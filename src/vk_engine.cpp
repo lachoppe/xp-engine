@@ -23,7 +23,7 @@
 #include "../third_party/imgui/backend/imgui_impl_sdl.h"
 #include "../third_party/imgui/backend/imgui_impl_vulkan.h"
 
-#include <ft2build.h>
+#include "ft2build.h"
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
