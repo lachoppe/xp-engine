@@ -190,6 +190,10 @@ public:
 
 	FrameData frames[FRAME_OVERLAP];
 
+	bool showOptions = false;
+	const float MIN_LOOK_SENSITIVITY_VALUE = 0.0005f;
+	const float MAX_LOOK_SENSITIVITY_VALUE = 0.005f;
+	float lookSensitivity = 5;
 	bool useDvorak = true;
 	const unsigned char* keyboardState { nullptr };
 	int keyboardStateLen;

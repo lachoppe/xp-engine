@@ -287,7 +287,6 @@ void VulkanEngine::DrawObjects(VkCommandBuffer cmd, RenderObject* first, int cou
 }
 
 
-
 void VulkanEngine::Init()
 {
 	SDL_Init(SDL_INIT_VIDEO);
@@ -1316,6 +1315,21 @@ void VulkanEngine::Draw()
 	VK_CHECK(vkWaitForFences(device, 1, &GetCurrentFrame().renderFence, true, timeoutNS));
 	VK_CHECK(vkResetFences(device, 1, &GetCurrentFrame().renderFence));
 
+	// Draw options window
+	if (showOptions)
+	{
+		ImGui::Begin("Options", &showOptions, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize);
+
+		ImGui::SliderFloat("Look Sensitivity", &lookSensitivity, 0, 10, "%0.2f");
+		ImGui::SameLine();
+		if (ImGui::Button("... Reset"))
+		{
+			lookSensitivity = 5;
+		}
+
+		ImGui::End();
+	}
+
 	DrawFPS();
 	// End debug widget drawing, prepare buffers
 	ImGui::Render();
@@ -1393,10 +1407,12 @@ void VulkanEngine::UpdateCamera(int deltaX, int deltaY)
 	const float ACCEL = 0.015f;
 	const float SPRINT = 3.0f;
 	const float DRAG = 0.9f;
-	const float MOUSE_SENSITIVITY = 0.001f;
 
-	camYaw += deltaX * MOUSE_SENSITIVITY;
-	camPitch += deltaY * MOUSE_SENSITIVITY;
+	float lookSensitivityValue = glm::mix(MIN_LOOK_SENSITIVITY_VALUE, MAX_LOOK_SENSITIVITY_VALUE, lookSensitivity / 10.0f);
+	camYaw += deltaX * lookSensitivityValue;
+	camPitch += glm::min(deltaY * lookSensitivityValue, glm::pi<float>() * 2.0f);
+	constexpr float halfPi = glm::pi<float>() * 0.5f;
+	camPitch = glm::clamp(camPitch, -halfPi, halfPi);
 
 	enum MOVE_DIR
 	{
@@ -1486,11 +1502,19 @@ void VulkanEngine::Run()
 				{
 					useDvorak = !useDvorak;
 				}
+				else if (e.key.keysym.sym == SDLK_ESCAPE)
+				{
+					showOptions = !showOptions;
+					SDL_SetRelativeMouseMode(showOptions ? SDL_FALSE : SDL_TRUE);
+				}
 			}
 			else if (e.type == SDL_MOUSEMOTION)
 			{
-				dx += e.motion.xrel;
-				dy += e.motion.yrel;
+				if (!showOptions)
+				{
+					dx += e.motion.xrel;
+					dy += e.motion.yrel;
+				}
 			}
 		}
 
