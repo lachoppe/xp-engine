@@ -23,7 +23,8 @@
 #include "../third_party/imgui/backend/imgui_impl_sdl.h"
 #include "../third_party/imgui/backend/imgui_impl_vulkan.h"
 
-#include "ft2build.h"
+#include "misc/freetype/imgui_freetype.h"
+
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
@@ -1210,14 +1211,19 @@ void VulkanEngine::InitImGui()
 	ImGui_ImplVulkan_Init(&initInfo, renderPass);
 
 	ImGuiIO& io = ImGui::GetIO();
-	io.Fonts->AddFontFromFileTTF("../assets/fonts/Cousine-Regular.ttf", 13, nullptr, io.Fonts->GetGlyphRangesDefault());
+	io.Fonts->FontBuilderIO = ImGuiFreeType::GetBuilderForFreeType();
+	io.Fonts->FontBuilderFlags |= ImGuiFreeTypeBuilderFlags_ForceAutoHint | ImGuiFreeTypeBuilderFlags_MonoHinting;
+	io.Fonts->AddFontFromFileTTF("../assets/fonts/Cousine-Regular.ttf", 14, nullptr, io.Fonts->GetGlyphRangesDefault());
+// 	io.Fonts->AddFontFromFileTTF("../assets/fonts/Karla-Regular.ttf", 13.0f);
+// 	io.Fonts->AddFontFromFileTTF("../assets/fonts/Roboto-Medium.ttf", 13.0f);
+
 
 	ImmediateSubmit([&](VkCommandBuffer cmd)
 		{
 			ImGui_ImplVulkan_CreateFontsTexture(cmd);
 		});
 
-	ImGui_ImplVulkan_DestroyFontUploadObjects();
+ 	ImGui_ImplVulkan_DestroyFontUploadObjects();
 
 	mainDeletionQueue.PushFunction([=]()
 		{
