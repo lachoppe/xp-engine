@@ -151,6 +151,8 @@ public:
 	float fieldOfView { 70.0f };
 	glm::vec3 camPos { 0.0f, 0.0f, 0.0f };
 	glm::vec3 camVel { 0.0f, 0.0f, 0.0f };
+	float camPitch { 0.0f };
+	float camYaw { 0.0f };
 
 	VkInstance instance { nullptr };
 	VkDebugUtilsMessengerEXT debugMessenger { nullptr };
@@ -206,7 +208,7 @@ public:
 	Mesh* GetMesh(const std::string& name);
 	FrameData& GetCurrentFrame();
 
-	void UpdateCamera();
+	void UpdateCamera(int deltaX, int deltaY);
 	void DrawObjects(VkCommandBuffer cmd, RenderObject* first, int count);
 
 	void DrawFPS();

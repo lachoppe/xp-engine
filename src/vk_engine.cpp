@@ -185,7 +185,10 @@ FrameData& VulkanEngine::GetCurrentFrame()
 
 void VulkanEngine::DrawObjects(VkCommandBuffer cmd, RenderObject* first, int count)
 {
-	const glm::mat4 view = glm::translate(glm::mat4(1.0f), camPos);
+	glm::mat4 view(1.0f);
+	view = glm::rotate(view, camPitch, glm::vec3(1.0f, 0.0f, 0.0f));
+	view = glm::rotate(view, camYaw, glm::vec3(0.0f, 1.0f, 0.0f));
+	view = glm::translate(view, camPos);
 	glm::mat4 projection = glm::perspective(glm::radians(fieldOfView), static_cast<float>(windowExtent.width) / static_cast<float>(windowExtent.height), 0.1f, 200.0f);
 	projection[1][1] *= -1;
 
@@ -299,6 +302,13 @@ void VulkanEngine::Init()
 		windowExtent.height,
 		window_flags
 	);
+
+	SDL_ShowCursor(0);
+	int result = SDL_SetRelativeMouseMode(SDL_TRUE);
+	if (result != 0)
+	{
+		OutputMessage("SDL_SetRelativeMouseMode error %d: %s\n", result, SDL_GetError());
+	}
 
 	InitVulkan();
 	InitSwapchain();
@@ -1378,11 +1388,15 @@ void VulkanEngine::Draw()
 }
 
 
-void VulkanEngine::UpdateCamera()
+void VulkanEngine::UpdateCamera(int deltaX, int deltaY)
 {
 	const float ACCEL = 0.015f;
 	const float SPRINT = 3.0f;
 	const float DRAG = 0.9f;
+	const float MOUSE_SENSITIVITY = 0.001f;
+
+	camYaw += deltaX * MOUSE_SENSITIVITY;
+	camPitch += deltaY * MOUSE_SENSITIVITY;
 
 	enum MOVE_DIR
 	{
@@ -1425,12 +1439,20 @@ void VulkanEngine::UpdateCamera()
 	if (keyboardState[SDL_SCANCODE_LSHIFT])
 		accel *= SPRINT;
 
+	glm::vec3 relVel {0.0f};
 	for (int i = 0; i < MOVE_DIR::COUNT; ++i)
 	{
 		if (keyboardState[scanCodes[i]])
-			camVel += moveVec[i] * accel;
+			relVel += moveVec[i] * accel;
 	}
 
+	glm::mat4 view(1.0f);
+	view = glm::rotate(view, camPitch, glm::vec3(1.0f, 0.0f, 0.0f));
+	view = glm::rotate(view, camYaw, glm::vec3(0.0f, 1.0f, 0.0f));
+	
+	glm::vec3 worldVel = glm::vec4(relVel, 1.0f) * view;
+
+	camVel += worldVel;
 	camVel *= DRAG;
 	camPos += camVel;
 }
@@ -1443,6 +1465,9 @@ void VulkanEngine::Run()
 
 	while (!bQuit)
 	{
+		int dx = 0;
+		int dy = 0;
+
 		while (SDL_PollEvent(&e) != 0)
 		{
 			ImGui_ImplSDL2_ProcessEvent(&e);
@@ -1462,13 +1487,18 @@ void VulkanEngine::Run()
 					useDvorak = !useDvorak;
 				}
 			}
+			else if (e.type == SDL_MOUSEMOTION)
+			{
+				dx += e.motion.xrel;
+				dy += e.motion.yrel;
+			}
 		}
 
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplSDL2_NewFrame(window);
 		ImGui::NewFrame();
 
-		UpdateCamera();
+		UpdateCamera(dx, dy);
 		Draw();
 	}
 }
