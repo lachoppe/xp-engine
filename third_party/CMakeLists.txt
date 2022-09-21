@@ -48,17 +48,22 @@ target_link_libraries(sdl2 INTERFACE SDL2 SDL2main)
 
 add_library(freetype INTERFACE)
 set(freetype_DIR freetype CACHE PATH "Path to Freetype")
-
+find_path(freetype_INCLUDE
+    NAMES "ft2build.h"
+    PATHS "${freetype_DIR}/include")
+find_path(freetype_LIB
+    NAMES "freetype.lib"
+    PATHS "${freetype_DIR}/lib")
 
 if (WIN32)
-target_include_directories(freetype INTERFACE ${freetype_DIR}/include ${freetype_DIR}/include/freetype)
-target_link_directories(freetype INTERFACE ${freetype_DIR}/lib)
+target_include_directories(freetype SYSTEM INTERFACE ${freetype_INCLUDE} ${freetype_INCLUDE}/freetype)
+target_link_directories(freetype INTERFACE ${freetype_LIB})
 elseif (UNIX)
 #target_include_directories(freetype INTERFACE ${freetype_DIR}/include ${freetype_DIR}/include/freetype)
 #target_link_directories(freetype INTERFACE ${freetype_DIR}/lib)
 endif()
 
-target_link_libraries(freetype INTERFACE freetype)
+target_link_libraries(freetype INTERFACE freetype.lib)
 
 
 
@@ -66,6 +71,7 @@ target_link_libraries(freetype INTERFACE freetype)
 add_library(imgui STATIC)
 
 target_include_directories(imgui PUBLIC imgui)
+target_include_directories(imgui PUBLIC ${freetype_INCLUDE} ${freetype_INCLUDE}/freetype)
 
 target_sources(imgui PRIVATE 
     imgui/imgui.h
@@ -75,7 +81,8 @@ target_sources(imgui PRIVATE
     imgui/imgui_draw.cpp
     imgui/imgui_tables.cpp
     imgui/imgui_widgets.cpp
-    imgui/imgui_freetype.cpp
+
+    imgui/misc/freetype/imgui_freetype.cpp
 
     imgui/backend/imgui_impl_vulkan.cpp
     imgui/backend/imgui_impl_sdl.cpp
