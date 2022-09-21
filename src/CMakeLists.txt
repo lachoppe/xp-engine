@@ -11,6 +11,8 @@ add_executable(vulkanTest
     vk_mesh.h
     vk_textures.cpp
     vk_textures.h
+    vk_config.cpp
+    vk_config.h
     )
 
 

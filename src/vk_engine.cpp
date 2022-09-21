@@ -309,6 +309,8 @@ void VulkanEngine::Init()
 		OutputMessage("SDL_SetRelativeMouseMode error %d: %s\n", result, SDL_GetError());
 	}
 
+	config.Load();
+
 	InitVulkan();
 	InitSwapchain();
 	InitCommands();
@@ -1318,17 +1320,14 @@ void VulkanEngine::Draw()
 	// Draw options window
 	if (showOptions)
 	{
-		ImGui::Begin("Options", &showOptions, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize);
-
-		ImGui::SliderFloat("Look Sensitivity", &lookSensitivity, 0, 10, "%0.2f");
-		ImGui::SameLine();
-		if (ImGui::Button("... Reset"))
-		{
-			lookSensitivity = 5;
-		}
-
-		ImGui::End();
+		config.ShowOptions(&showOptions);
 	}
+
+	if (showingOptions == true && showOptions == false)
+	{
+		config.Save();
+	}
+	showingOptions = showOptions;
 
 	DrawFPS();
 	// End debug widget drawing, prepare buffers
@@ -1408,7 +1407,7 @@ void VulkanEngine::UpdateCamera(int deltaX, int deltaY)
 	const float SPRINT = 3.0f;
 	const float DRAG = 0.9f;
 
-	float lookSensitivityValue = glm::mix(MIN_LOOK_SENSITIVITY_VALUE, MAX_LOOK_SENSITIVITY_VALUE, lookSensitivity / 10.0f);
+	float lookSensitivityValue = glm::mix(config.minLookSensitivityValue, config.maxLookSensitivityValue, config.lookSensitivity / 10.0f);
 	camYaw += deltaX * lookSensitivityValue;
 	camPitch += glm::min(deltaY * lookSensitivityValue, glm::pi<float>() * 2.0f);
 	constexpr float halfPi = glm::pi<float>() * 0.5f;
@@ -1449,7 +1448,7 @@ void VulkanEngine::UpdateCamera(int deltaX, int deltaY)
 		glm::vec3( 0.0f, -1.0f,  0.0f),
 		glm::vec3( 0.0f,  1.0f,  0.0f)
 	};
-	const SDL_Scancode* scanCodes = useDvorak ? scDvorak : scQwerty;
+	const SDL_Scancode* scanCodes = config.useDvorak ? scDvorak : scQwerty;
 
 	float accel = ACCEL;
 	if (keyboardState[SDL_SCANCODE_LSHIFT])
@@ -1497,10 +1496,6 @@ void VulkanEngine::Run()
 				if (e.key.keysym.sym == SDLK_SPACE)
 				{
 					selectedShader = (selectedShader + 1) % 2;
-				}
-				else if (e.key.keysym.sym == SDLK_d)
-				{
-					useDvorak = !useDvorak;
 				}
 				else if (e.key.keysym.sym == SDLK_ESCAPE)
 				{

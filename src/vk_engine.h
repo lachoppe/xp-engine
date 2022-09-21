@@ -7,6 +7,7 @@
 
 #include "vk_types.h"
 #include "vk_mesh.h"
+#include "vk_config.h"
 
 
 void OutputMessage(const char* format, ...);
@@ -190,11 +191,11 @@ public:
 
 	FrameData frames[FRAME_OVERLAP];
 
+	Config config;
+
 	bool showOptions = false;
-	const float MIN_LOOK_SENSITIVITY_VALUE = 0.0005f;
-	const float MAX_LOOK_SENSITIVITY_VALUE = 0.005f;
-	float lookSensitivity = 5;
-	bool useDvorak = true;
+	bool showingOptions = false;
+
 	const unsigned char* keyboardState { nullptr };
 	int keyboardStateLen;
 
