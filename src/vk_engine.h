@@ -13,6 +13,18 @@
 void OutputMessage(const char* format, ...);
 void OutputMessage(const wchar_t* format, ...);
 
+#define ASSERT_M( condition, message, ... ) \
+	if (!(condition)) { OutputMessage("\n\nASSERT FAILED at %s:%d:   " message "\n\n\n", __FILE__, __LINE__, __VA_ARGS__); abort(); }
+
+#define ASSERT( condition ) \
+	if (!(condition)) { OutputMessage("\n\nASSERT FAILED at %s:%d:   " #condition "\n\n\n", __FILE__, __LINE__); abort(); }
+
+#define WARN_M( condition, message, ... ) \
+	if (!(condition)) { OutputMessage("\nWARNING TEST FAILED at %s:%d:   " message "\n\n", __FILE__, __LINE__, __VA_ARGS__); }
+
+#define WARN( condition ) \
+	if (!(condition)) { OutputMessage("\nWARNING TEST FAILED at %s:%d:   " #condition "\n\n", __FILE__, __LINE__); }
+
 
 struct MeshPushConstants
 {
@@ -132,6 +144,15 @@ struct FrameData
 constexpr unsigned int FRAME_OVERLAP = 2;
 
 
+struct Toast
+{
+	std::string message;
+	uint64_t eraseTime{ 0 };
+};
+
+constexpr int DEFAULT_TOAST_DURATION_MS = 3000;
+
+
 class VulkanEngine
 {
 public:
@@ -160,6 +181,9 @@ public:
 	VkPhysicalDevice chosenGPU { nullptr };
 	VkDevice device { nullptr };
 	VkSurfaceKHR surface { nullptr };
+	VkSurfaceCapabilitiesKHR surfaceCaps;
+	std::vector<VkSurfaceFormatKHR> surfaceFormats;
+	std::vector<VkPresentModeKHR> presentModes;
 
 	UploadContext uploadContext;
 
@@ -167,6 +191,7 @@ public:
 	VkFormat swapchainImageFormat;
 	std::vector<VkImage> swapchainImages;
 	std::vector<VkImageView> swapchainImageViews;
+	bool needSwapchainRecreate { false };
 
 	VkFormat depthFormat;
 	AllocatedImage depthImage;
@@ -199,10 +224,14 @@ public:
 	const unsigned char* keyboardState { nullptr };
 	int keyboardStateLen;
 
+	std::vector<Toast> toasts;
+
 	// scene
 	std::vector<RenderObject> renderables;
 	std::unordered_map<std::string, Material> materials;
 	std::unordered_map<std::string, Mesh> meshes;
+
+	void AddToast(const char* message, int durationMS = DEFAULT_TOAST_DURATION_MS);
 
 	size_t PadUniformBufferSize(size_t originalSize) const;
 
@@ -216,7 +245,7 @@ public:
 	void UpdateCamera(int deltaX, int deltaY);
 	void DrawObjects(VkCommandBuffer cmd, RenderObject* first, int count);
 
-	void DrawFPS();
+	void DrawGUI();
 
 	void ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
 
@@ -241,6 +270,10 @@ private:
 	void InitPipelines();
 	void InitScene();
 	void InitImGui();
+
+	void CleanupFramebuffers();
+	void CleanupSwapchain();
+	void RecreateSwapchain();
 
 	void UploadMesh(Mesh& mesh);
 };

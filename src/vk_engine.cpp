@@ -25,6 +25,7 @@
 
 #include "misc/freetype/imgui_freetype.h"
 
+#define BREAK_ON_VALIDATION_ERROR	true
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
@@ -111,6 +112,18 @@ size_t PaddedSizes::GetSizeOf(int i) const
 	if (i < 0 || i >= padded.size())
 		return 0;
 	return padded[i];
+}
+
+
+void VulkanEngine::AddToast(const char* message, int durationMS)
+{
+	using namespace std::chrono;
+	uint64_t ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+
+	Toast toast;
+	toast.message = message;
+	toast.eraseTime = ms + durationMS;
+	toasts.push_back( toast );
 }
 
 
@@ -309,6 +322,7 @@ void VulkanEngine::Init()
 		OutputMessage("SDL_SetRelativeMouseMode error %d: %s\n", result, SDL_GetError());
 	}
 
+	config.SetEngine(this);
 	config.Load();
 
 	InitVulkan();
@@ -369,6 +383,9 @@ VKAPI_ATTR VkBool32 VKAPI_CALL custom_debug_callback(
 	auto mt = to_string_message_type(messageType);
 
 	OutputMessage("[%s: %s]\n%s\n", ms, mt, pCallbackData->pMessage);
+
+	if (BREAK_ON_VALIDATION_ERROR && messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT && messageType == VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT)
+		DebugBreak();
 
 	return VK_FALSE; // Applications must return false here
 }
@@ -570,6 +587,22 @@ void VulkanEngine::InitVulkan()
 	OutputMessage("GPU device name: %s\n", gpuProperties.deviceName);
 	OutputMessage("GPU minimum buffer alignment: %d\n", gpuProperties.limits.minUniformBufferOffsetAlignment);
 
+	VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(chosenGPU, surface, &surfaceCaps));
+	uint32_t formatCount = 0;
+	VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(chosenGPU, surface, &formatCount, nullptr));
+	if (formatCount > 0)
+	{
+		surfaceFormats.resize(formatCount);
+		VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(chosenGPU, surface, &formatCount, surfaceFormats.data()));
+	}
+	uint32_t presentModeCount = 0;
+	VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(chosenGPU, surface, &presentModeCount, nullptr));
+	if (presentModeCount > 0)
+	{
+		presentModes.resize(presentModeCount);
+		VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(chosenGPU, surface, &presentModeCount, presentModes.data()));
+	}
+	config.ConfigureSyncModes(presentModes, VK_PRESENT_MODE_FIFO_KHR);
 
 	graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
 	graphicsQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
@@ -586,9 +619,19 @@ void VulkanEngine::InitSwapchain()
 {
 	vkb::SwapchainBuilder swapchainBuilder{ chosenGPU, device, surface };
 
+	VkSurfaceFormatKHR presentFormat = surfaceFormats[0];
+	for (const auto& format : surfaceFormats)
+	{
+		if (format.format == VK_FORMAT_B8G8R8A8_SRGB && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+		{
+			presentFormat = format;
+			break;
+		}
+	}
+
 	vkb::Swapchain vkbSwapchain = swapchainBuilder
-		.use_default_format_selection()
-		.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
+		.set_desired_format(presentFormat)
+		.set_desired_present_mode(config.GetSyncMode())
 		.set_desired_extent(windowExtent.width, windowExtent.height)
 		.build()
 		.value();
@@ -597,11 +640,6 @@ void VulkanEngine::InitSwapchain()
 	swapchainImages = vkbSwapchain.get_images().value();
 	swapchainImageViews = vkbSwapchain.get_image_views().value();
 	swapchainImageFormat = vkbSwapchain.image_format;
-
-	mainDeletionQueue.PushFunction([=]()
-		{
-			vkDestroySwapchainKHR(device, swapchain, nullptr);
-		});
 
 	VkExtent3D depthImageExtent = {
 		windowExtent.width,
@@ -619,11 +657,7 @@ void VulkanEngine::InitSwapchain()
 	VkImageViewCreateInfo dImgViewInfo = vkinit::ImageViewCreateInfo(depthFormat, depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
 	VK_CHECK(vkCreateImageView(device, &dImgViewInfo, nullptr, &depthImageView));
 
-	mainDeletionQueue.PushFunction([=]()
-		{
-			vkDestroyImageView(device, depthImageView, nullptr);
-			vmaDestroyImage(allocator, depthImage.image, depthImage.allocation);
-		});
+	needSwapchainRecreate = false;
 }
 
 
@@ -753,12 +787,6 @@ void VulkanEngine::InitFramebuffers()
 		fbInfo.pAttachments = attachments;
 		fbInfo.attachmentCount = 2;
 		VK_CHECK(vkCreateFramebuffer(device, &fbInfo, nullptr, &frameBuffers[i]));
-
-		mainDeletionQueue.PushFunction([=]()
-			{
-				vkDestroyFramebuffer(device, frameBuffers[i], nullptr);
-				vkDestroyImageView(device, swapchainImageViews[i], nullptr);
-			});
 	}
 }
 
@@ -1224,7 +1252,8 @@ void VulkanEngine::InitImGui()
 	ImGuiIO& io = ImGui::GetIO();
 	io.Fonts->FontBuilderIO = ImGuiFreeType::GetBuilderForFreeType();
 	io.Fonts->FontBuilderFlags |= ImGuiFreeTypeBuilderFlags_ForceAutoHint | ImGuiFreeTypeBuilderFlags_MonoHinting;
-	io.Fonts->AddFontFromFileTTF("../assets/fonts/Cousine-Regular.ttf", 14, nullptr, io.Fonts->GetGlyphRangesDefault());
+	io.Fonts->AddFontFromFileTTF("../assets/fonts/FiraCode-Regular.ttf", 14, nullptr, io.Fonts->GetGlyphRangesDefault());
+//	io.Fonts->AddFontFromFileTTF("../assets/fonts/Cousine-Regular.ttf", 14, nullptr, io.Fonts->GetGlyphRangesDefault());
 // 	io.Fonts->AddFontFromFileTTF("../assets/fonts/Karla-Regular.ttf", 13.0f);
 // 	io.Fonts->AddFontFromFileTTF("../assets/fonts/Roboto-Medium.ttf", 13.0f);
 
@@ -1257,6 +1286,9 @@ void VulkanEngine::Cleanup()
 
 		mainDeletionQueue.Flush();
 
+		CleanupFramebuffers();
+		CleanupSwapchain();
+
 		vmaDestroyAllocator(allocator);
 
 		vkDestroySurfaceKHR(instance, surface, nullptr);
@@ -1269,8 +1301,61 @@ void VulkanEngine::Cleanup()
 	}
 }
 
+void VulkanEngine::CleanupFramebuffers()
+{
+	if (isInitialized)
+	{
+		const size_t swapchainImageCount = swapchainImages.size();
 
-void VulkanEngine::DrawFPS()
+		for (size_t i = 0; i < swapchainImageCount; ++i)
+		{
+			vkDestroyFramebuffer(device, frameBuffers[i], nullptr);
+			vkDestroyImageView(device, swapchainImageViews[i], nullptr);
+		}
+
+		frameBuffers.clear();
+		swapchainImageViews.clear();
+		swapchainImages.clear();
+	}
+}
+
+void VulkanEngine::CleanupSwapchain()
+{
+	if (isInitialized)
+	{
+		if (depthImageView != nullptr)
+		{
+			vkDestroyImageView(device, depthImageView, nullptr);
+			depthImageView = nullptr;
+		}
+
+		if (depthImage.image != nullptr)
+		{
+			vmaDestroyImage(allocator, depthImage.image, depthImage.allocation);
+			depthImage.image = nullptr;
+			depthImage.allocation = nullptr;
+		}
+
+		if (swapchain != nullptr)
+		{
+			vkDestroySwapchainKHR(device, swapchain, nullptr);
+			swapchain = nullptr;
+		}
+	}
+}
+
+void VulkanEngine::RecreateSwapchain()
+{
+	vkDeviceWaitIdle(device);
+
+	CleanupFramebuffers();
+	CleanupSwapchain();
+
+	InitSwapchain();
+	InitFramebuffers();
+}
+
+void VulkanEngine::DrawGUI()
 {
 	ImGuiIO& io = ImGui::GetIO();
 	ImGuiWindowFlags windowFlags = 
@@ -1279,23 +1364,53 @@ void VulkanEngine::DrawFPS()
 
 	const float PAD = 0.0f;
 	const ImGuiViewport* viewport = ImGui::GetMainViewport();
-	ImVec2 workPos = viewport->WorkPos;
-	ImVec2 workSize = viewport->WorkSize;
+	const ImVec2 workPos = viewport->WorkPos;
+	const ImVec2 workSize = viewport->WorkSize;
+
 	ImVec2 windowPos;
-	// Top right
+	ImVec2 windowPosPivot;
+
+	// FPS in top right
 	windowPos.x = workPos.x + workSize.x - PAD;
 	windowPos.y = workPos.y + PAD;
-	ImVec2 windowPosPivot;
 	windowPosPivot.x = 1.0f;
 	windowPosPivot.y = 0.0f;
-	ImGui::SetNextWindowPos(windowPos, ImGuiCond_Once, windowPosPivot);
+	ImGui::SetNextWindowPos(windowPos, ImGuiCond_Always, windowPosPivot);
 // 	ImGui::SetNextWindowViewport(viewport->ID);
 
 	if (ImGui::Begin("FPS OVERLAY", nullptr, windowFlags))
 	{
-		ImGui::TextColored(ImVec4(0.5f, 1.0f, 1.0f, 1.0f), "%4d", static_cast<uint32_t>(lastFPS));
+		ImGui::TextColored(ImVec4(0.5f, 1.0f, 1.0f, 1.0f), "%4d\n%4.2f ", static_cast<uint32_t>(lastFPS), 1000.0f / lastFPS);
 	}
 	ImGui::End();
+
+	// Global toasts in top center
+	if (toasts.size() > 0)
+	{
+		windowPos.x = workPos.x + (workSize.x / 2) - PAD;
+		windowPos.y = workPos.y + PAD;
+		windowPosPivot.x = 0.5f;
+		windowPosPivot.y = 0.0f;
+		ImGui::SetNextWindowPos(windowPos, ImGuiCond_Always, windowPosPivot);
+
+		if (ImGui::Begin("TOAST MESSAGES", nullptr, windowFlags))
+		{
+			for (int i = 0; i < toasts.size(); i++)
+			{
+				ImGui::TextColored(ImVec4(0.5f, 1.0f, 1.0f, 1.0f), toasts[i].message.c_str());
+			}
+
+			using namespace std::chrono;
+			uint64_t ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+
+			for (int i = toasts.size() - 1; i >= 0; i--)
+			{
+				if (toasts[i].eraseTime <= ms)
+					toasts.erase(toasts.begin() + i);
+			}
+		}
+		ImGui::End();
+	}
 }
 
 
@@ -1315,7 +1430,6 @@ void VulkanEngine::Draw()
 	const uint64_t timeoutNS = 1000000000;		// one second
 
 	VK_CHECK(vkWaitForFences(device, 1, &GetCurrentFrame().renderFence, true, timeoutNS));
-	VK_CHECK(vkResetFences(device, 1, &GetCurrentFrame().renderFence));
 
 	// Draw options window
 	if (showOptions)
@@ -1326,15 +1440,27 @@ void VulkanEngine::Draw()
 	if (showingOptions == true && showOptions == false)
 	{
 		config.Save();
+		needSwapchainRecreate = true;
 	}
 	showingOptions = showOptions;
 
-	DrawFPS();
+	DrawGUI();
 	// End debug widget drawing, prepare buffers
 	ImGui::Render();
 
 	uint32_t swapchainImageIndex;
-	VK_CHECK(vkAcquireNextImageKHR(device, swapchain, timeoutNS, GetCurrentFrame().presentSemaphore, nullptr, &swapchainImageIndex));
+	VkResult acquireNextImageKHRResult = vkAcquireNextImageKHR(device, swapchain, timeoutNS, GetCurrentFrame().presentSemaphore, nullptr, &swapchainImageIndex);
+	if (acquireNextImageKHRResult == VK_ERROR_OUT_OF_DATE_KHR)
+	{
+		RecreateSwapchain();
+		return;
+	}
+	else if (acquireNextImageKHRResult != VK_SUBOPTIMAL_KHR) // this case will be handled after this frame is finished drawing
+	{
+		VK_CHECK(acquireNextImageKHRResult);
+	}
+
+	VK_CHECK(vkResetFences(device, 1, &GetCurrentFrame().renderFence));
 
 	VK_CHECK(vkResetCommandBuffer(GetCurrentFrame().mainCommandBuffer, 0));
 
@@ -1395,7 +1521,15 @@ void VulkanEngine::Draw()
 	presentInfo.pWaitSemaphores = &GetCurrentFrame().renderSemaphore;
 	presentInfo.pImageIndices = &swapchainImageIndex;
 
-	VK_CHECK(vkQueuePresentKHR(graphicsQueue, &presentInfo));
+	VkResult queuePresentKHRResult = vkQueuePresentKHR(graphicsQueue, &presentInfo);
+	if (queuePresentKHRResult == VK_ERROR_OUT_OF_DATE_KHR || queuePresentKHRResult == VK_SUBOPTIMAL_KHR || needSwapchainRecreate)
+	{
+		RecreateSwapchain();
+	}
+	else if (queuePresentKHRResult != VK_SUCCESS)
+	{
+		VK_CHECK(queuePresentKHRResult);
+	}
 
 	frameNumber++;
 }
@@ -1496,6 +1630,14 @@ void VulkanEngine::Run()
 				if (e.key.keysym.sym == SDLK_SPACE)
 				{
 					selectedShader = (selectedShader + 1) % 2;
+				}
+				else if (e.key.keysym.sym == SDLK_v)
+				{
+					config.SetNextSyncMode();
+					char toast[128];
+					sprintf(toast, "New sync mode: %s", config.GetSyncModeName());
+					AddToast(toast);
+					needSwapchainRecreate = true;
 				}
 				else if (e.key.keysym.sym == SDLK_ESCAPE)
 				{
