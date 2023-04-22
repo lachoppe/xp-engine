@@ -8,22 +8,17 @@
 #include "vk_types.h"
 #include "vk_mesh.h"
 #include "vk_config.h"
+#include "cvars.h"
 
 
-void OutputMessage(const char* format, ...);
-void OutputMessage(const wchar_t* format, ...);
+static AutoCVar_Float cvar_lookSensitivity("i.lookSensitivity", "How sensitive the view rotation is to input", 5.0, 0.1, 10.0, CVarFlags::EditFloatDrag);
+static AutoCVar_Int cvar_dvorak("i.dvorak", "Use Dvorak default keybindings (instead of WASD)", 0, 0, 1, static_cast<CVarFlags>(static_cast<uint32_t>(CVarFlags::EditCheckbox) | static_cast<uint32_t>(CVarFlags::Advanced)));
+static AutoCVar_Int cvar_gpuDriven("r.gpuDriven", "Use GPU-driven rendering pipeline", 0, 0, 1, CVarFlags::EditCheckbox);
 
-#define ASSERT_M( condition, message, ... ) \
-	if (!(condition)) { OutputMessage("\n\nASSERT FAILED at %s:%d:   " message "\n\n\n", __FILE__, __LINE__, __VA_ARGS__); abort(); }
-
-#define ASSERT( condition ) \
-	if (!(condition)) { OutputMessage("\n\nASSERT FAILED at %s:%d:   " #condition "\n\n\n", __FILE__, __LINE__); abort(); }
-
-#define WARN_M( condition, message, ... ) \
-	if (!(condition)) { OutputMessage("\nWARNING TEST FAILED at %s:%d:   " message "\n\n", __FILE__, __LINE__, __VA_ARGS__); }
-
-#define WARN( condition ) \
-	if (!(condition)) { OutputMessage("\nWARNING TEST FAILED at %s:%d:   " #condition "\n\n", __FILE__, __LINE__); }
+static AutoCVar_Int cvar_syncMode_0("r.syncMode_0", "No sync (IMMEDIATE)", VK_PRESENT_MODE_IMMEDIATE_KHR, CVarFlags::NoEdit);
+static AutoCVar_Int cvar_syncMode_1("r.syncMode_1", "V-sync - no wait (MAILBOX)", VK_PRESENT_MODE_MAILBOX_KHR, CVarFlags::NoEdit);
+static AutoCVar_Int cvar_syncMode_2("r.syncMode_2", "V-sync (FIFO)", VK_PRESENT_MODE_FIFO_KHR, CVarFlags::NoEdit);
+static AutoCVar_Int cvar_syncMode("r.syncMode", "Which mode to use for syncing the frame render to display refresh", 1, 0, 2, CVarFlags::EditCombo);
 
 
 struct MeshPushConstants

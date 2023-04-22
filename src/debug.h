@@ -1,0 +1,49 @@
+#pragma once
+
+#ifdef UNICODE
+#define VK_CHECK(x)																		\
+	do																					\
+	{																					\
+		VkResult err = x;																\
+		if (err)																		\
+		{																				\
+			const int msgLen = 256;														\
+			wchar_t str[msgLen];														\
+			swprintf(str, msgLen, L"[%d] Detected Vulkan error: %d\n", __LINE__, err);	\
+			OutputDebugString(str);														\
+			abort();																	\
+		}																				\
+	} while (0);
+#else
+#define VK_CHECK(x)																		\
+	do																					\
+	{																					\
+		VkResult err = x;																\
+		if (err)																		\
+		{																				\
+			const int msgLen = 256;														\
+			char str[msgLen];															\
+			sprintf_s(str, msgLen, "[%d] Detected Vulkan error: %d\n", __LINE__, err);	\
+			OutputDebugString(str);														\
+			abort();																	\
+		}																				\
+	} while (0);
+#endif
+
+void OutputMessage(const char* format, ...);
+void OutputMessage(const wchar_t* format, ...);
+
+#define ASSERT_M( condition, message, ... ) \
+	if (!(condition)) { OutputMessage("\n\nASSERT FAILED at %s:%d:   " message "\n\n\n", __FILE__, __LINE__, __VA_ARGS__); abort(); }
+
+#define ASSERT( condition ) \
+	if (!(condition)) { OutputMessage("\n\nASSERT FAILED at %s:%d:   " #condition "\n\n\n", __FILE__, __LINE__); abort(); }
+
+#define WARN_M( condition, message, ... ) \
+	if (!(condition)) { OutputMessage("\nWARNING TEST FAILED at %s:%d:   " message "\n\n", __FILE__, __LINE__, __VA_ARGS__); }
+
+#define WARN( condition ) \
+	if (!(condition)) { OutputMessage("\nWARNING TEST FAILED at %s:%d:   " #condition "\n\n", __FILE__, __LINE__); }
+
+#define DEBUG_M( message, ... ) \
+	OutputMessage("\DEBUG MESSAGE at %s:%d:   " message "\n\n", __FILE__, __LINE__, __VA_ARGS__);

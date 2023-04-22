@@ -1,8 +1,6 @@
 #include "vk_engine.h"
 
 #include <windows.h>
-#include <debugapi.h>
-#include <stdio.h>
 #include <fstream>
 
 #include <chrono>
@@ -10,6 +8,7 @@
 #include "vk_types.h"
 #include "vk_initializers.h"
 #include "vk_textures.h"
+#include "debug.h"
 
 #include "VKBootstrap.h"
 
@@ -29,63 +28,6 @@
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
-
-#ifdef UNICODE
-#define VK_CHECK(x)																		\
-	do																					\
-	{																					\
-		VkResult err = x;																\
-		if (err)																		\
-		{																				\
-			const int msgLen = 256;														\
-			wchar_t str[msgLen];														\
-			swprintf(str, msgLen, L"[%d] Detected Vulkan error: %d\n", __LINE__, err);	\
-			OutputDebugString(str);														\
-			abort();																	\
-		}																				\
-	} while (0);
-#else
-#define VK_CHECK(x)																		\
-	do																					\
-	{																					\
-		VkResult err = x;																\
-		if (err)																		\
-		{																				\
-			const int msgLen = 256;														\
-			char str[msgLen];															\
-			sprintf_s(str, msgLen, "[%d] Detected Vulkan error: %d\n", __LINE__, err);	\
-			OutputDebugString(str);														\
-			abort();																	\
-		}																				\
-	} while (0);
-#endif
-
-
-void OutputMessage(const char* format, ...)
-{
-	const int bufLen{ 512 };
-	char buffer[bufLen];
-	va_list args;
-	va_start(args, format);
-	vsnprintf(buffer, bufLen, format, args);
-
-	OutputDebugStringA(buffer);
-
-	va_end(args);
-}
-
-void OutputMessage(const wchar_t* format, ...)
-{
-	const int bufLen{ 512 };
-	wchar_t buffer[bufLen];
-	va_list args;
-	va_start(args, format);
-	vswprintf(buffer, bufLen, format, args);
-
-	OutputDebugStringW(buffer);
-
-	va_end(args);
-}
 
 
 void PaddedSizes::Reset()
@@ -384,7 +326,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL custom_debug_callback(
 
 	OutputMessage("[%s: %s]\n%s\n", ms, mt, pCallbackData->pMessage);
 
-	if (BREAK_ON_VALIDATION_ERROR && messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT && messageType == VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT)
+	if (BREAK_ON_VALIDATION_ERROR && (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) && (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT))
 		DebugBreak();
 
 	return VK_FALSE; // Applications must return false here
@@ -850,11 +792,11 @@ void VulkanEngine::InitDescriptors()
 	VkDescriptorSetLayoutBinding sceneBinding = vkinit::DescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 1);
 	VkDescriptorSetLayoutBinding bindings[] = { cameraBinding, sceneBinding };
 	
-	VkDescriptorSetLayoutCreateInfo setInfo = {};
-	setInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	setInfo.bindingCount = 2;
-	setInfo.pBindings = bindings;
-	vkCreateDescriptorSetLayout(device, &setInfo, nullptr, &globalSetLayout);
+	VkDescriptorSetLayoutCreateInfo globalSetInfo = {};
+	globalSetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	globalSetInfo.bindingCount = 2;
+	globalSetInfo.pBindings = bindings;
+	vkCreateDescriptorSetLayout(device, &globalSetInfo, nullptr, &globalSetLayout);
 
 	cameraSceneFrameSize.Add(this, sizeof(GPUCameraData));
 	cameraSceneFrameSize.Add(this, sizeof(GPUSceneData));
@@ -871,11 +813,11 @@ void VulkanEngine::InitDescriptors()
 
 
 	VkDescriptorSetLayoutBinding textureBind = vkinit::DescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0);
-	VkDescriptorSetLayoutCreateInfo set3Info = {};
-	set3Info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	set3Info.bindingCount = 1;
-	set3Info.pBindings = &textureBind;
-	vkCreateDescriptorSetLayout(device, &set3Info, nullptr, &singleTextureSetLayout);
+	VkDescriptorSetLayoutCreateInfo textureSetInfo = {};
+	textureSetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	textureSetInfo.bindingCount = 1;
+	textureSetInfo.pBindings = &textureBind;
+	vkCreateDescriptorSetLayout(device, &textureSetInfo, nullptr, &singleTextureSetLayout);
 
 
 	VkDescriptorSetAllocateInfo allocInfo = {};
@@ -1403,7 +1345,7 @@ void VulkanEngine::DrawGUI()
 			using namespace std::chrono;
 			uint64_t ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 
-			for (int i = toasts.size() - 1; i >= 0; i--)
+			for (int i = static_cast<int>(toasts.size()) - 1; i >= 0; i--)
 			{
 				if (toasts[i].eraseTime <= ms)
 					toasts.erase(toasts.begin() + i);
@@ -1427,7 +1369,7 @@ void VulkanEngine::Draw()
 		lastSecFrameNumber = frameNumber;
 	}
 
-	const uint64_t timeoutNS = 1000000000;		// one second
+	const uint64_t timeoutNS = 1ULL * 1000ULL * 1000ULL * 1000ULL;		// one second
 
 	VK_CHECK(vkWaitForFences(device, 1, &GetCurrentFrame().renderFence, true, timeoutNS));
 
@@ -1541,7 +1483,7 @@ void VulkanEngine::UpdateCamera(int deltaX, int deltaY)
 	const float SPRINT = 3.0f;
 	const float DRAG = 0.9f;
 
-	float lookSensitivityValue = glm::mix(config.minLookSensitivityValue, config.maxLookSensitivityValue, config.lookSensitivity / 10.0f);
+	float lookSensitivityValue = glm::mix(config.minLookSensitivityValue, config.maxLookSensitivityValue, cvar_lookSensitivity.GetFloat() / 10.0f);
 	camYaw += deltaX * lookSensitivityValue;
 	camPitch += glm::min(deltaY * lookSensitivityValue, glm::pi<float>() * 2.0f);
 	constexpr float halfPi = glm::pi<float>() * 0.5f;
@@ -1558,7 +1500,7 @@ void VulkanEngine::UpdateCamera(int deltaX, int deltaY)
 		//
 		COUNT
 	};
-	const SDL_Scancode scQwerty[MOVE_DIR::COUNT] = {
+	const SDL_Scancode scMoveQwerty[MOVE_DIR::COUNT] = {
 		SDL_SCANCODE_W,
 		SDL_SCANCODE_A,
 		SDL_SCANCODE_S,
@@ -1566,7 +1508,7 @@ void VulkanEngine::UpdateCamera(int deltaX, int deltaY)
 		SDL_SCANCODE_LALT,
 		SDL_SCANCODE_SPACE
 	};
-	const SDL_Scancode scDvorak[MOVE_DIR::COUNT] = {
+	const SDL_Scancode scMoveDvorak[MOVE_DIR::COUNT] = {
 		SDL_SCANCODE_COMMA,
 		SDL_SCANCODE_A,
 		SDL_SCANCODE_O,
@@ -1582,7 +1524,7 @@ void VulkanEngine::UpdateCamera(int deltaX, int deltaY)
 		glm::vec3( 0.0f, -1.0f,  0.0f),
 		glm::vec3( 0.0f,  1.0f,  0.0f)
 	};
-	const SDL_Scancode* scanCodes = config.useDvorak ? scDvorak : scQwerty;
+	const SDL_Scancode* moveScanCodes = cvar_dvorak.Get() ? scMoveDvorak : scMoveQwerty;
 
 	float accel = ACCEL;
 	if (keyboardState[SDL_SCANCODE_LSHIFT])
@@ -1591,7 +1533,7 @@ void VulkanEngine::UpdateCamera(int deltaX, int deltaY)
 	glm::vec3 relVel {0.0f};
 	for (int i = 0; i < MOVE_DIR::COUNT; ++i)
 	{
-		if (keyboardState[scanCodes[i]])
+		if (keyboardState[moveScanCodes[i]])
 			relVel += moveVec[i] * accel;
 	}
 
@@ -1635,7 +1577,7 @@ void VulkanEngine::Run()
 				{
 					config.SetNextSyncMode();
 					char toast[128];
-					sprintf(toast, "New sync mode: %s", config.GetSyncModeName());
+					sprintf_s(toast, 128, "New sync mode: %s", config.GetSyncModeName());
 					AddToast(toast);
 					needSwapchainRecreate = true;
 				}

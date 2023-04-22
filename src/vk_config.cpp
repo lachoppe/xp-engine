@@ -4,30 +4,11 @@
 
 #include <windows.h>
 #include "vk_engine.h"
+#include "debug.h"
 
-SyncMode Config::syncModes[] = {
-	{
-		"No sync (IMMEDIATE)",
-		VK_PRESENT_MODE_IMMEDIATE_KHR,
-		false
-	},
-	{
-		"V-sync (FIFO)",
-		VK_PRESENT_MODE_FIFO_KHR,
-		false
-	},
-	{
-		"V-sync - no wait (MAILBOX)",
-		VK_PRESENT_MODE_MAILBOX_KHR,
-		false
-	}
-};
 
 void Config::Setup()
 {
-	SetupValue(lookSensitivity, 5, "Options", "lookSensitivity");
-	SetupValue(useDvorak, false, "Options", "useDvorak");
-	SetupValue(syncMode, 0, "Options", "syncMode");
 	SetupValue(minLookSensitivityValue, 0.0005f, "Constants", "lookSensitivityMin");
 	SetupValue(maxLookSensitivityValue, 0.005f, "Constants", "lookSensitivityMax");
 }
@@ -58,24 +39,41 @@ void Config::SetupValue(bool& value, bool default, std::string category, std::st
 
 void Config::ConfigureSyncModes(std::vector<VkPresentModeKHR> modes, VkPresentModeKHR defaultMode)
 {
-	const int syncModeCount = IM_ARRAYSIZE(syncModes);
-	bool anyAvailable = false;
+// 	const int syncModeCount = cvar_syncMode.GetMax();
+// 	bool anyAvailable = false;
 	defaultSyncMode = defaultMode;
 
-	for (int i = 0; i < syncModeCount; ++i)
-	{
-		for (const auto& mode : modes)
-		{
-			if (mode == syncModes[i].mode)
-			{
-				syncModes[i].available = true;
-				anyAvailable = true;
-				break;
-			}
-		}
-	}
+	// The plan is to validate what's in the specified combo box using an array of valid values
+	// If there's a combo value that's not in the list of valid values, it should be removed from the cvar's combo list
+	// 
+	// Can't access CVarStorage* from out here
+	// Can't use the VkPresentModeKHR type in cvars
+	// Therefore, the appropriate mechanism is probably a callback mechanism:
+	//		AutoCVar_Int::ValidateComboValues(bool (callback*(int32_t value, valid list, valid list len)), valid list, valid list len)
+	// Then ValidateComboValues can run the callback against each combo value using the valid list, which returns a bool
+	// If the combo value isn't valid, then that combo gets removed from the combo lists
 
-	WARN_M(anyAvailable, "No valid sync mode found!  Falling back to mode %d", defaultMode);
+// 	for (int i = 0; i < syncModeCount; ++i)
+// 	{
+// if (i == 1) continue; // --------------------------------------------------------------------------------------------------------------------------
+// 		
+// 		int comboMode = cvar_syncMode.GetComboValueInitial(i);
+// 		if (comboMode >= 0)
+// 		{
+// 			for (const auto& mode : modes)
+// 			{
+// 				if (mode == static_cast<VkPresentModeKHR>(comboMode))
+// 				{
+// 					syncModes[i].available = true;
+// 					anyAvailable = true;
+// 					break;
+// 				}
+// 			}
+// 		}
+// 		cvar_syncMode.SetComboValue(i);
+// 	}
+
+// 	WARN_M(anyAvailable, "No valid sync mode found!  Falling back to mode %d", defaultMode);
 
 	ValidateSyncMode();
 }
@@ -124,60 +122,39 @@ void Config::ShowOptions(bool* showOptions)
 
 	ImGui::Begin("Options", showOptions, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize);
 
-	ImGui::SliderFloat("Look Sensitivity", &lookSensitivity, 0, 10, "%0.2f");
-	ImGui::SameLine();
-	if (ImGui::Button("... Reset"))
-	{
-		lookSensitivity = 5;
-	}
+	CVarSystem::Get()->DrawImGuiEditor();
 
-	ImGui::Separator();
-
-	ImGui::Checkbox("Use Dvorak Layout", &useDvorak);
-	struct ComboFuncs
-	{
-		static bool ItemGetter(void* data, int n, const char** out_str)
-		{
-			const SyncMode* modes = static_cast<SyncMode*>(data);
-
-			if (modes[n].available)
-				*out_str = modes[n].name;
-			else
-				*out_str = "Not available";
-
-			return true;
-		}
-	};
-	if (syncMode < 0)
-		syncMode = 0;
-	ImGui::Combo("Display Sync Mode", &syncMode, &ComboFuncs::ItemGetter, syncModes, IM_ARRAYSIZE(syncModes));
 	ImGui::End();
 }
 
 void Config::SetNextSyncMode()
 {
+	int32_t& syncMode = *cvar_syncMode.GetPtr();
+
 	if (syncMode >= 0)
-		syncMode = (syncMode + 1) % IM_ARRAYSIZE(syncModes);
+		syncMode = (syncMode + 1) % cvar_syncMode.GetMax();
 	ValidateSyncMode();
 }
 
 void Config::ValidateSyncMode()
 {
+	int& syncMode = *cvar_syncMode.GetPtr();
+	const int modeCount = cvar_syncMode.GetMax();
+	const int modeStart = syncMode;
+
 	if (syncMode < 0)
 		syncMode = 0;
 
-	if (syncMode >= IM_ARRAYSIZE(syncModes))
-		syncMode = IM_ARRAYSIZE(syncModes) - 1;
+	if (syncMode >= modeCount)
+		syncMode = modeCount - 1;
 
 	// Find the next available syncMode
-	for (int i = 0; i < IM_ARRAYSIZE(syncModes); ++i)
+	for (int i = 0; i < modeCount; ++i)
 	{
-		int index = (syncMode + i) % IM_ARRAYSIZE(syncModes);
-		if (syncModes[index].available)
-		{
-			syncMode = index;
+		syncMode = (modeStart + i) % modeCount;
+		int32_t modeValue = cvar_syncMode.GetComboValue();
+		if (modeValue >= 0 && modeValue < modeCount)
 			return;
-		}
 	}
 
 	syncMode = -1;
@@ -185,14 +162,17 @@ void Config::ValidateSyncMode()
 
 VkPresentModeKHR Config::GetSyncMode()
 {
-	if (syncMode >= 0)
-		return syncModes[syncMode].mode;
+	int32_t mode = cvar_syncMode.GetComboValue();
+
+	if (mode >= 0)
+		return static_cast<VkPresentModeKHR>(mode);
 	return defaultSyncMode;
 }
 
 const char* Config::GetSyncModeName()
 {
-	if (syncMode >= 0)
-		return syncModes[syncMode].name;
+	const char* name = cvar_syncMode.GetComboValueName();
+	if (name)
+		return name;
 	return "Fallback Mode";
 }

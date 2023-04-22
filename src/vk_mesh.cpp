@@ -1,5 +1,6 @@
 #include "vk_mesh.h"
 #include "vk_engine.h"
+#include "debug.h"
 
 #include <tiny_obj_loader.h>
 #include <iostream>

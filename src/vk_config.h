@@ -4,12 +4,6 @@
 #include <vector>
 #include "vk_types.h"
 
-typedef struct SyncMode
-{
-	const char* name;
-	const VkPresentModeKHR mode;
-	bool available;
-};
 
 template<typename T> class ConfigValue
 {
@@ -24,8 +18,6 @@ public:
 class Config
 {
 private:
-	static SyncMode syncModes[3];
-
 	const char* CONFIG_FILENAME = ".\\config.ini";
 		
 	std::vector<ConfigValue<int>* > ints;
@@ -36,11 +28,6 @@ private:
 
 	class VulkanEngine* engine{ nullptr };
 public:
-	// Options
-	float lookSensitivity;
-	bool useDvorak;
-	int syncMode;
-
 	// Constants
 	float minLookSensitivityValue;
 	float maxLookSensitivityValue;

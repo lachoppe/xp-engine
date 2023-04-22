@@ -13,6 +13,11 @@ add_executable(vulkanTest
     vk_textures.h
     vk_config.cpp
     vk_config.h
+    cvars.h
+    cvars.cpp
+    debug.h
+    debug.cpp
+    string_utils.h
     )
 
 
