@@ -250,7 +250,7 @@ void VulkanEngine::Init()
 
 	SDL_WindowFlags window_flags = SDL_WindowFlags::SDL_WINDOW_VULKAN;
 	window = SDL_CreateWindow(
-		"Vulkan Engine",
+		"XP Engine",
 		SDL_WINDOWPOS_UNDEFINED,
 		SDL_WINDOWPOS_UNDEFINED,
 		windowExtent.width,
@@ -497,7 +497,7 @@ void VulkanEngine::InitVulkan()
 {
 	vkb::InstanceBuilder builder;
 
-	vkb::detail::Result<vkb::Instance> instRet = builder.set_app_name("Vulkan Test Application")
+	vkb::detail::Result<vkb::Instance> instRet = builder.set_app_name("XP Engine Test Application")
 		.request_validation_layers(true)
 		.require_api_version(1, 1, 0)
 		.set_debug_callback(custom_debug_callback)

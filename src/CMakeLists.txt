@@ -1,26 +1,12 @@
+set(CMAKE_CXX_STANDARD 17)
 
 # Add source to this project's executable.
-add_executable(vulkanTest
-    main.cpp
-    vk_engine.cpp
-    vk_engine.h
-    vk_types.h
-    vk_initializers.cpp
-    vk_initializers.h
-    vk_mesh.cpp
-    vk_mesh.h
-    vk_textures.cpp
-    vk_textures.h
-    vk_config.cpp
-    vk_config.h
-    vk_descriptors.cpp
-    vk_descriptors.h
-    cvars.h
-    cvars.cpp
-    debug.h
-    debug.cpp
-    string_utils.h
-    )
+file(GLOB ENGINE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
+
+add_subdirectory(assetlib)
+add_subdirectory(assetcook)
+
+add_executable(vulkanTest ${ENGINE_FILES})
 
 
 set_property(TARGET vulkanTest PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:vulkanTest>")
