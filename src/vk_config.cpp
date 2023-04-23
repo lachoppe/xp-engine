@@ -132,14 +132,14 @@ void Config::SetNextSyncMode()
 	int32_t& syncMode = *cvar_syncMode.GetPtr();
 
 	if (syncMode >= 0)
-		syncMode = (syncMode + 1) % cvar_syncMode.GetMax();
+		syncMode = (syncMode + 1) % (cvar_syncMode.GetMax() + 1);
 	ValidateSyncMode();
 }
 
 void Config::ValidateSyncMode()
 {
 	int& syncMode = *cvar_syncMode.GetPtr();
-	const int modeCount = cvar_syncMode.GetMax();
+	const int modeCount = cvar_syncMode.GetMax() + 1;
 	const int modeStart = syncMode;
 
 	if (syncMode < 0)

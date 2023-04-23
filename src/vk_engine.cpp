@@ -6,6 +6,7 @@
 #include <chrono>
 
 #include "vk_types.h"
+#include "vk_descriptors.h"
 #include "vk_initializers.h"
 #include "vk_textures.h"
 #include "debug.h"
@@ -1645,7 +1646,7 @@ VkPipeline PipelineBuilder::BuildPipeline(VkDevice device, VkRenderPass pass)
 	VkPipeline newPipeline;
 	if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &newPipeline) != VK_SUCCESS)
 	{
-		OutputDebugString("Failed to create pipeline\n");
+		OutputMessage("Failed to create pipeline\n");
 		return VK_NULL_HANDLE;
 	}
 	else

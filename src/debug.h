@@ -7,10 +7,7 @@
 		VkResult err = x;																\
 		if (err)																		\
 		{																				\
-			const int msgLen = 256;														\
-			wchar_t str[msgLen];														\
-			swprintf(str, msgLen, L"[%d] Detected Vulkan error: %d\n", __LINE__, err);	\
-			OutputDebugString(str);														\
+			OutputMessage(L"[%d] Detected Vulkan error: %d\n", __LINE__, err);			\
 			abort();																	\
 		}																				\
 	} while (0);
@@ -21,10 +18,7 @@
 		VkResult err = x;																\
 		if (err)																		\
 		{																				\
-			const int msgLen = 256;														\
-			char str[msgLen];															\
-			sprintf_s(str, msgLen, "[%d] Detected Vulkan error: %d\n", __LINE__, err);	\
-			OutputDebugString(str);														\
+			OutputMessage("[%d] Detected Vulkan error: %d\n", __LINE__, err);			\
 			abort();																	\
 		}																				\
 	} while (0);
