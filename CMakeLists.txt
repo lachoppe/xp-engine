@@ -13,6 +13,8 @@ add_subdirectory(third_party)
 
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin")
 
+add_subdirectory(assetlib)
+add_subdirectory(assetcook)
 add_subdirectory(src)
 
 

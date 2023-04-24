@@ -1,5 +1,7 @@
 #pragma once
 
+#include <chrono>
+
 #ifdef UNICODE
 #define VK_CHECK(x)																		\
 	do																					\
@@ -23,6 +25,16 @@
 		}																				\
 	} while (0);
 #endif
+
+#define TIMINGS true
+
+#define START_TIMER(var) \
+	auto _##var##Start = std::chrono::high_resolution_clock::now();
+
+#define END_TIMER(name, var) \
+	auto _##var##Diff = std::chrono::high_resolution_clock::now() - _##var##Start; \
+	if (TIMINGS) { std::cout << name << std::chrono::duration_cast<std::chrono::nanoseconds>(_##var##Diff).count() / 1000000.0 << "ms" << std::endl; }
+
 
 void OutputMessage(const char* format, ...);
 void OutputMessage(const wchar_t* format, ...);

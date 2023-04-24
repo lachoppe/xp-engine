@@ -18,3 +18,5 @@ out/build/x64-Release/
 bin/imgui.ini
 
 bin/config.ini
+
+cooked/
