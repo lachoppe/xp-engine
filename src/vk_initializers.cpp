@@ -244,15 +244,18 @@ VkSubmitInfo vkinit::SubmitInfo(VkCommandBuffer* cmd)
 	return info;
 }
 
-VkSamplerCreateInfo vkinit::SamplerCreateInfo(VkFilter filters, VkSamplerAddressMode samplerAddressMode)
+VkSamplerCreateInfo vkinit::SamplerCreateInfo(VkFilter filters, VkSamplerAddressMode samplerAddressMode, VkSamplerMipmapMode mipmapAddressMode, int maxLOD)
 {
 	VkSamplerCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
 	info.magFilter = filters;
 	info.minFilter = filters;
+	info.mipmapMode = mipmapAddressMode;
 	info.addressModeU = samplerAddressMode;
 	info.addressModeV = samplerAddressMode;
 	info.addressModeW = samplerAddressMode;
+	info.minLod = 0;
+	info.maxLod = maxLOD;
 
 	return info;
 }

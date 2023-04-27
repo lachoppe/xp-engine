@@ -33,7 +33,7 @@
 
 #define END_TIMER(name, var) \
 	auto _##var##Diff = std::chrono::high_resolution_clock::now() - _##var##Start; \
-	if (TIMINGS) { std::cout << name << std::chrono::duration_cast<std::chrono::nanoseconds>(_##var##Diff).count() / 1000000.0 << "ms" << std::endl; }
+	if (TIMINGS) { std::cout << name << ": " << std::chrono::duration_cast<std::chrono::nanoseconds>(_##var##Diff).count() / 1000000.0 << "ms" << std::endl; }
 
 
 void OutputMessage(const char* format, ...);

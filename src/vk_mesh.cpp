@@ -286,9 +286,9 @@ bool Mesh::LoadFromObj(const char* filename)
 
 				// DEBUG normal as color
 // 				newVert.color = newVert.normal;
-				newVert.color.r = 1.0f;
-				newVert.color.g = 1.0f;
-				newVert.color.b = 1.0f;
+				newVert.color.r = 255;
+				newVert.color.g = 255;
+				newVert.color.b = 255;
 
 				// Update object bounding box
 				objPosMin = glm::min(objPosMin, newVert.position);

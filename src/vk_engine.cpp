@@ -389,20 +389,41 @@ void VulkanEngine::LoadMeshes()
 	std::unordered_map<std::string, std::string> meshesToLoad;
 
 	// List of meshes to load
-	meshesToLoad["monkey"]			= "../assets/monkey_smooth.obj";
-	meshesToLoad["apple"]			= "../assets/apple.obj";
-// 	meshesToLoad["rabbit_low"]		= "../assets/rabbit_low.obj";
-// 	meshesToLoad["rabbit_med"]		= "../assets/rabbit_med.obj";
-	meshesToLoad["rabbit_high"]		= "../assets/rabbit_high.obj";
-	meshesToLoad["lost_empire"]		= "../assets/lost_empire.obj";
-
-	for (auto it = meshesToLoad.begin(); it != meshesToLoad.end(); ++it)
+	constexpr bool loadCooked = true;
+	if (loadCooked)
 	{
-		Mesh mesh;
-		if (mesh.LoadFromObj((*it).second.c_str()))
+		meshesToLoad["monkey"] = "../cooked/monkey_smooth.msh";
+		meshesToLoad["apple"] = "../cooked/apple.msh";
+		meshesToLoad["rabbit_high"] = "../cooked/rabbit_high.msh";
+		meshesToLoad["lost_empire"] = "../cooked/lost_empire.msh";
+
+		for (auto it = meshesToLoad.begin(); it != meshesToLoad.end(); ++it)
 		{
-			UploadMesh(mesh);
-			meshes[(*it).first.c_str()] = mesh;
+			Mesh mesh;
+			if (mesh.LoadFromAsset((*it).second.c_str()))
+			{
+				UploadMesh(mesh);
+				meshes[(*it).first.c_str()] = mesh;
+			}
+		}
+	}
+	else
+	{
+		meshesToLoad["monkey"] = "../assets/monkey_smooth.obj";
+		meshesToLoad["apple"] = "../assets/apple.obj";
+		// 	meshesToLoad["rabbit_low"]		= "../assets/rabbit_low.obj";
+		// 	meshesToLoad["rabbit_med"]		= "../assets/rabbit_med.obj";
+		meshesToLoad["rabbit_high"] = "../assets/rabbit_high.obj";
+		meshesToLoad["lost_empire"] = "../assets/lost_empire.obj";
+
+		for (auto it = meshesToLoad.begin(); it != meshesToLoad.end(); ++it)
+		{
+			Mesh mesh;
+			if (mesh.LoadFromObj((*it).second.c_str()))
+			{
+				UploadMesh(mesh);
+				meshes[(*it).first.c_str()] = mesh;
+			}
 		}
 	}
 }
@@ -412,9 +433,19 @@ void VulkanEngine::LoadImages()
 {
 	Texture lostEmpire;
 
-	if (vkutil::LoadImageFromFile(*this, "../assets/lost_empire-RGBA.png", lostEmpire.image))
+	constexpr bool loadCooked = true;
+
+	bool loaded = false;
+
+	if (loadCooked)
+		loaded = vkutil::LoadImageFromAsset(*this, "../cooked/lost_empire-RGBA.tex", lostEmpire.image);
+	else
+		loaded = vkutil::LoadImageFromFile(*this, "../assets/lost_empire-RGBA.png", lostEmpire.image);
+
+	if (loaded)
 	{
 		VkImageViewCreateInfo imageInfo = vkinit::ImageViewCreateInfo(VK_FORMAT_R8G8B8A8_SRGB, lostEmpire.image.image, VK_IMAGE_ASPECT_COLOR_BIT);
+		imageInfo.subresourceRange.levelCount = lostEmpire.image.mipLevels;
 		vkCreateImageView(device, &imageInfo, NULL, &lostEmpire.imageView);
 
 		loadedTextures["empire_diffuse"] = lostEmpire;
@@ -1122,7 +1153,7 @@ void VulkanEngine::InitScene()
 		map.transformMatrix = glm::translate(glm::vec3(5.0f, -10.0f, 0.0f));
 
 		VkSampler sampler;
-		VkSamplerCreateInfo samplerInfo = vkinit::SamplerCreateInfo(VK_FILTER_NEAREST);
+		VkSamplerCreateInfo samplerInfo = vkinit::SamplerCreateInfo(VK_FILTER_NEAREST, VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_MIPMAP_MODE_LINEAR);
 		vkCreateSampler(device, &samplerInfo, nullptr, &sampler);
 
 		mainDeletionQueue.PushFunction([=]()

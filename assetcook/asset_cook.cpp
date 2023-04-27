@@ -12,10 +12,12 @@
 #include "asset_core.h"
 #include "texture_asset.h"
 #include "mesh_asset.h"
+#include "material_asset.h"
 
 // #define TINYGLTF_IMPLEMENTATION
 // #include <tiny_gltf.h>
-// #include <nvtt.h>
+
+#include <nvtt.h>
 
 // #include <glm/glm.hpp>
 // #include <glm/gtx/transform.hpp>
@@ -30,12 +32,20 @@ constexpr bool TIMINGS = true;
 
 #define END_TIMING(name, var) \
 	auto _##var##Diff = timer::high_resolution_clock::now() - _##var##Start; \
-	if (TIMINGS) { std::cout << INDENT << name << timer::duration_cast<timer::nanoseconds>(_##var##Diff).count() / 1000000.0 << "ms" << std::endl; }
+	if (TIMINGS) { std::cout << INDENT << name << ": " << timer::duration_cast<timer::nanoseconds>(_##var##Diff).count() / 1000000.0 << "ms" << std::endl; }
 
 namespace fs = std::filesystem;
 namespace timer = std::chrono;
 using namespace assets;
 
+
+struct ConverterState
+{
+	fs::path assetPath;
+	fs::path exportPath;
+
+	fs::path ConvertToExportRelative(fs::path path) const;
+};
 
 bool ConvertImage(const fs::path& inPath, const fs::path& outPath)
 {
@@ -52,16 +62,61 @@ bool ConvertImage(const fs::path& inPath, const fs::path& outPath)
 	}
 
 	TextureInfo info{};
-	info.dataSize = static_cast<uint64_t>(width) * height * 4;		// loaded as RGBA
-	info.resolution[0] = width;
-	info.resolution[1] = height;
 	info.textureFormat = TextureFormat::RGBA8;
 	info.sourceFile = inPath.string();
 
-// 	auto packStart = timer::high_resolution_clock::now();
-	AssetFile asset = PackTexture(&info, pixels);
-// 	auto packDiff = timer::high_resolution_clock::now() - packStart;
-// 	PRINT_TIMING_DIFF("PNG pack: ", packDiff)
+
+	std::vector<char> fullBuffer;
+
+	struct SimpleHandler : nvtt::OutputHandler
+	{
+		virtual bool writeData(const void* data, int size)
+		{
+			for (int i = 0; i < size; ++i)
+				buffer.push_back((reinterpret_cast<const char*>(data))[i]);
+			return true;
+		}
+		virtual void beginImage(int size, int width, int height, int depth, int face, int mipLevel) {};
+		virtual void endImage() {};
+
+		std::vector<char> buffer;
+	};
+
+	nvtt::Context context;
+	nvtt::CompressionOptions compOptions;
+	nvtt::OutputOptions outOptions;
+	nvtt::Surface surface;
+	SimpleHandler handler;
+	outOptions.setOutputHandler(&handler);
+	surface.setImage(nvtt::InputFormat_BGRA_8UB, width, height, 1, pixels);
+
+	START_TIMING(mips)
+	// Would need to change this for BCn compression (4 is the min size)
+	do
+	{
+		// Don't need to build anything for the top mip
+		if (!fullBuffer.empty())
+			surface.buildNextMipmap(nvtt::MipmapFilter_Box);
+		compOptions.setFormat(nvtt::Format::Format_RGBA);
+		compOptions.setPixelType(nvtt::PixelType::PixelType_UnsignedNorm);
+		context.compress(surface, 0, 0, compOptions, outOptions);
+
+		info.pages.push_back({});
+		info.pages.back().width = surface.width();
+		info.pages.back().height = surface.height();
+		info.pages.back().originalSize = static_cast<uint32_t>(handler.buffer.size());
+
+		fullBuffer.insert(fullBuffer.end(), handler.buffer.begin(), handler.buffer.end());
+		handler.buffer.clear();
+	} while (surface.canMakeNextMipmap(1));
+
+	END_TIMING("Build mipmaps", mips)
+
+	info.dataSize = fullBuffer.size();
+
+	START_TIMING(pack)
+	AssetFile asset = PackTexture(&info, fullBuffer.data());
+	END_TIMING("Pack texture", pack)
 
 	stbi_image_free(pixels);
 
@@ -76,6 +131,9 @@ void PackVertex(Vertex_PNCV_F32& newVert, tinyobj::real_t vx, tinyobj::real_t vy
 	newVert.normal[0] = nx;
 	newVert.normal[1] = ny;
 	newVert.normal[2] = nz;
+	newVert.color[0] = 1.0f;
+	newVert.color[1] = 1.0f;
+	newVert.color[2] = 1.0f;
 	newVert.uv[0] = u;
 	newVert.uv[1] = 1.0f - v;	// Vulkan V is flipped from OBJ
 }
@@ -88,6 +146,9 @@ void PackVertex(Vertex_P32N8C8V16& newVert, tinyobj::real_t vx, tinyobj::real_t 
 	newVert.normal[0] = static_cast<uint8_t>(((nx + 1.0) / 2.0) * 255);
 	newVert.normal[1] = static_cast<uint8_t>(((ny + 1.0) / 2.0) * 255);
 	newVert.normal[2] = static_cast<uint8_t>(((nz + 1.0) / 2.0) * 255);
+	newVert.color[0] = 255;
+	newVert.color[1] = 255;
+	newVert.color[2] = 255;
 	newVert.uv[0] = u;
 	newVert.uv[1] = 1.0f - v;	// Vulkan V is flipped from OBJ
 }
@@ -160,10 +221,9 @@ bool ConvertMesh(const fs::path& inPath, const fs::path& outPath)
 	fs::path mtlPath = inPath;
 	mtlPath.remove_filename();
 
-// 	auto loadStart = timer::high_resolution_clock::now();
+	START_TIMING(load)
 	tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, inPath.u8string().c_str(), mtlPath.u8string().c_str());
-// 	auto loadDiff = timer::high_resolution_clock::now() - loadStart;
-// 	PRINT_TIMING_DIFF("OBJ load: ", loadDiff)
+	END_TIMING("Load mesh", load)
 
 	if (!warn.empty())
 	{
@@ -178,7 +238,7 @@ bool ConvertMesh(const fs::path& inPath, const fs::path& outPath)
 
 	using IndexFormat = uint32_t;
 	using VertexFormat = assets::Vertex_PNCV_F32;
-	auto VertexFormatEnum = assets::VertexFormat::PNCV_F32;
+	constexpr auto VertexFormatEnum = assets::VertexFormat::PNCV_F32;
 
 	std::vector<IndexFormat> indices;
 	std::vector<VertexFormat> vertices;
@@ -186,18 +246,16 @@ bool ConvertMesh(const fs::path& inPath, const fs::path& outPath)
 
 	MeshInfo info{};
 	info.vertexFormat = VertexFormatEnum;
-	info.vertexBufferSize = vertices.size() & sizeof(VertexFormat);
-	info.indexBufferSize = indices.size() & sizeof(IndexFormat);
+	info.vertexBufferSize = vertices.size() * sizeof(VertexFormat);
+	info.indexBufferSize = indices.size() * sizeof(IndexFormat);
 	info.indexSize = sizeof(IndexFormat);
 	info.sourceFile = inPath.string();
 
 	info.bounds = CalculateBounds(vertices.data(), vertices.size());
 
-// 	auto packStart = timer::high_resolution_clock::now();
+	START_TIMING(pack)
 	AssetFile asset = PackMesh(&info, vertices.data(), indices.data());
-// 	auto packDiff = timer::high_resolution_clock::now() - packStart;
-// 	PRINT_TIMING_DIFF("OBJ pack: ", packDiff)
-
+	END_TIMING("Pack mesh", pack)
 
 	return SaveBinary(outPath.u8string().c_str(), asset);
 }
@@ -224,7 +282,7 @@ int main(int argc, char* argv[])
 
 	std::cout << "Processing asset directory at " << directory << std::endl;
 
-// 	auto cookStart = timer::high_resolution_clock::now();
+	START_TIMING(cook)
 
 	for (auto& p : fs::recursive_directory_iterator(directory))
 	{
@@ -260,8 +318,7 @@ int main(int argc, char* argv[])
 		}
 	}
 
-// 	auto cookDiff = timer::high_resolution_clock::now() - cookStart;
-// 	PRINT_TIMING_DIFF("COOK: ", cookDiff)
+	END_TIMING("Cook", cook)
 
 	std::cout << std::endl << "Press enter to continue...";
 	int a = std::getchar();

@@ -10,7 +10,14 @@ add_dependencies(vulkanTest Shaders)
 set_property(TARGET vulkanTest PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:vulkanTest>")
 
 target_include_directories(vulkanTest PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(vulkanTest vkbootstrap vma glm tinyobjloader imgui stb_image)
+target_include_directories(vulkanTest INTERFACE assetlib)
 
-target_link_libraries(vulkanTest Vulkan::Vulkan sdl2 freetype assetlib)
+target_link_libraries(vulkanTest vkbootstrap vma glm tinyobjloader imgui stb_image Vulkan::Vulkan sdl2 freetype assetlib)
 
+add_custom_command(TARGET vulkanTest POST_BUILD
+  # COMMAND ${CMAKE_COMMAND} -E echo "DLLs: $<TARGET_RUNTIME_DLLS:vulkanTest>"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:vulkanTest> $<TARGET_FILE_DIR:vulkanTest>
+  COMMAND_EXPAND_LISTS
+)
+
+# install(FILES $<TARGET_RUNTIME_DLLS:vulkanTest> TYPE BIN)

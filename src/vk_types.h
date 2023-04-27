@@ -15,4 +15,5 @@ struct AllocatedImage
 {
 	VkImage image;
 	VmaAllocation allocation;
+	int mipLevels;
 };

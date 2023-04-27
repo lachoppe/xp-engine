@@ -32,7 +32,6 @@ target_sources(tinyobjloader PRIVATE
 
 target_include_directories(tinyobjloader PUBLIC tinyobjloader)
 
-
 add_library(sdl2 INTERFACE)
 #set(sdl2_DIR "SDL_PATH" CACHE PATH "Path to SDL2")
 set(sdl2_DIR SDL2 CACHE PATH "Path to SDL2")
@@ -51,7 +50,7 @@ target_link_libraries(sdl2 INTERFACE SDL2 SDL2main)
 
 
 
-add_library(freetype INTERFACE)
+add_library(freetype SHARED IMPORTED)
 set(freetype_DIR freetype CACHE PATH "Path to Freetype")
 find_path(freetype_INCLUDE
     NAMES "ft2build.h"
@@ -59,6 +58,8 @@ find_path(freetype_INCLUDE
 find_path(freetype_LIB
     NAMES "freetype.lib"
     PATHS "${freetype_DIR}/lib")
+set_target_properties(freetype PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/${freetype_DIR}/bin/freetype.dll")
+set_target_properties(freetype PROPERTIES IMPORTED_IMPLIB "${CMAKE_CURRENT_SOURCE_DIR}/${freetype_DIR}/lib/freetype.lib")
 
 if (WIN32)
 target_include_directories(freetype SYSTEM INTERFACE ${freetype_INCLUDE} ${freetype_INCLUDE}/freetype)

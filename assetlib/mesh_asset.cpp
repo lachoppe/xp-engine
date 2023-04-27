@@ -101,7 +101,7 @@ assets::AssetFile assets::PackMesh(MeshInfo* info, void* vertexData, void* index
 
 	size_t dataSize = info->vertexBufferSize + info->indexBufferSize;
 	std::vector<char> mergedBuffer;
-	mergedBuffer.reserve(dataSize);
+	mergedBuffer.resize(dataSize);
 
 	std::memcpy(mergedBuffer.data(), vertexData, info->vertexBufferSize);
 	std::memcpy(mergedBuffer.data() + info->vertexBufferSize, indexData, info->indexBufferSize);
