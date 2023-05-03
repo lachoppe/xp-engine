@@ -1,21 +1,13 @@
 
 *.vsidx
 
-.vs/vulkanTest/v17/
-
-x64/Debug/
-
-.vs/vulkanTest/FileContentIndex/
+.vs/
+.git/
 
 x64/
-
-out/build/x64-Debug/
-
-.vs/
-
-out/build/x64-Release/
 
 cooked/
 ignore/
 
 bin/
+out/
